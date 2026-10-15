@@ -39,24 +39,46 @@ for your distribution.
 
 ## Install
 
-pacman package (Arch), which declares the dependencies and installs into `/usr`:
+The release archive on GitHub Releases (`appvol-X.Y.Z.tar.gz`) contains the
+whole project plus `install.sh`, so it works on any distribution without root:
 
 ```sh
-bin/appvol-release --package                   # build dist/*.pkg.tar.zst
-sudo pacman -U dist/appvol-*.pkg.tar.zst       # the daemon, the CLI and the GUI
+tar xzf appvol-X.Y.Z.tar.gz
+cd appvol-X.Y.Z
+./install.sh --service        # into ~/.local; --uninstall reverts it
+./install.sh --no-gui         # ... without the window and the tray icon
+```
+
+`install.sh` checks the Python modules and names the packages for your
+distribution. Requirements:
+
+| Module | Why |
+| --- | --- |
+| `python` (3.11+) | `tomllib` for the config |
+| `dbus` (`python-dbus`) | session bus: the daemon API and the OSD |
+| `gi` (`python-gobject`) | the GLib main loop the daemon runs in |
+| `pulsectl` (`python-pulsectl`) | stream volume through pipewire-pulse |
+
+The window and the tray icon (`appvol-gui`) additionally need `pyside6`,
+`kirigami`, `qqc2-desktop-style` and `breeze-icons`; the daemon and the CLI
+never import them, so a minimal install can leave them out.
+
+The rest comes from the session: KDE Plasma 6 on Wayland (`kwin` for the
+focus, `plasmashell` for the OSD), `kglobalacceld` and System Settings for the
+hotkeys, PipeWire with `pipewire-pulse`.
+
+On Arch, instead of `install.sh`, use the split pacman packages from the
+release:
+
+```sh
+sudo pacman -U dist/appvol-*.pkg.tar.zst          # daemon + CLI
+sudo pacman -U dist/appvol-gui-*.pkg.tar.zst      # window + tray icon
 systemctl --user daemon-reload && systemctl --user enable --now appvold
 ```
 
-The release builds two packages: `appvol` for the daemon and the CLI, and
-`appvol-gui` for the window and the tray icon, which pulls PySide6. Installing
-only the first one keeps a machine without Qt small.
-
-Per user, any distribution, no root:
-
-```sh
-./install.sh --service     # into ~/.local; --uninstall reverts it
-./install.sh --no-gui      # ... without the window and the tray icon
-```
+Debian/Ubuntu `.deb` and Fedora `.rpm` are not built by the release script, but
+can be made from the same tarball with `alien` or `fpm` (or `checkinstall`)
+if you need them.
 
 From the checkout, without installing anything:
 
