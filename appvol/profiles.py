@@ -216,6 +216,12 @@ class ProfileSelection:
     def use(self, now: float) -> None:
         self.last_use = now
 
+    def select(self, profile_id: str, now: float) -> str:
+        """Make ``profile_id`` current; the explicit form of :meth:`toggle`."""
+        self.current = profile_id
+        self.last_use = now
+        return self.current
+
     def toggle(self, profile_id: str, now: float) -> str:
         """Switch to ``profile_id``, or back to Active when it is current."""
         self.current = ACTIVE_ID if self.current == profile_id else profile_id

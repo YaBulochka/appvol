@@ -60,8 +60,11 @@ fi
 
 for required in \
     "appvol-$version/appvol/__init__.py" \
+    "appvol-$version/appvol/gui/qml/Main.qml" \
     "appvol-$version/kwin/appvol.js" \
     "appvol-$version/desktop/org.appvol.desktop.in" \
+    "appvol-$version/desktop/org.appvol.gui.desktop.in" \
+    "appvol-$version/desktop/appvol.svg" \
     "appvol-$version/systemd/appvold.service.in" \
     "appvol-$version/install.sh" \
     "appvol-$version/packaging/PKGBUILD" \
@@ -97,16 +100,24 @@ if [ "$with_package" = yes ]; then
         exit 1
     fi
     ( cd packaging && makepkg --force --cleanbuild --clean --noconfirm )
-    package="$(find packaging -maxdepth 1 -name "appvol-$version-*.pkg.tar.*" -printf '%f\n' | head -1)"
-    cp "packaging/$package" dist/
-    built="        dist/$package"
-    echo "appvol-release: package built: dist/$package"
+    # The PKGBUILD is a split package: appvol and appvol-gui.
+    for file in packaging/appvol-*-"$version"-*.pkg.tar.*; do
+        if [ ! -f "$file" ]; then
+            echo "appvol-release: makepkg produced no package to copy" >&2
+            exit 1
+        fi
+        cp "$file" dist/
+        built="$built
+        dist/$(basename "$file")"
+        echo "appvol-release: package built: dist/$(basename "$file")"
+    done
 fi
 
 echo
 echo "appvol: release $version"
 echo "        dist/$archive  ($(du -h "dist/$archive" | cut -f1), sha256 ${sum:0:16}...)"
 [ -n "$built" ] && echo "$built"
+true
 echo "        install:  (cd packaging && makepkg -si)   or   sudo pacman -U dist/*.pkg.tar.*"
 echo "        or:       ./install.sh --service          (per-user, no root)"
 if [ -d .git ]; then

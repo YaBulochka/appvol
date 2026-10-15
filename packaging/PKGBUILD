@@ -1,34 +1,47 @@
 # Maintainer: appvol contributors
-pkgname=appvol
+#
+# Two packages from one source: the daemon and the CLI need neither Qt nor a
+# display, while the window and the tray icon pull PySide6 and (with it) a few
+# hundred megabytes.  Splitting them keeps a headless or minimal install small.
+pkgbase=appvol
+pkgname=('appvol' 'appvol-gui')
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="Volume control for the audio streams of the focused window (KDE Plasma 6 on Wayland)"
 arch=('any')
 url="https://github.com/YaBulochka/appvol"
 license=('MIT')
-depends=('python' 'python-dbus' 'python-gobject' 'python-pulsectl')
-optdepends=(
-    'plasma-desktop: the Plasma session the daemon drives (KWin script, OSD, shortcuts)'
-    'kwin: loads the script that reports the focused window'
-    'kglobalacceld: binds the hotkeys in System Settings -> Shortcuts'
-    'pipewire-pulse: the audio server the daemon talks to'
-)
-install="$pkgname.install"
 
 # The source is the release archive built by bin/appvol-release, which also
 # copies it next to this file.  The checksum is deliberately not part of the
 # file: the archive contains this PKGBUILD, so any sum written here would
 # describe a different archive.  bin/appvol-release writes the sum to
 # appvol-$pkgver.tar.gz.sha256 and to dist/ instead.
-source=("$pkgname-$pkgver.tar.gz")
+source=("$pkgbase-$pkgver.tar.gz")
 sha256sums=('SKIP')
 
-package() {
-    # makepkg unpacks the archive into $srcdir but stays in its own directory.
-    cd "$srcdir/$pkgname-$pkgver"
+# makepkg unpacks the archive into $srcdir but stays in its own directory.
+_sourcedir="$srcdir/$pkgbase-$pkgver"
+
+_site() {
+    python -c 'import sys; print("lib/python{}.{}/site-packages".format(*sys.version_info[:2]))'
+}
+
+package_appvol() {
+    pkgdesc="Volume control for the audio streams of the focused window (KDE Plasma 6 on Wayland)"
+    depends=('python' 'python-dbus' 'python-gobject' 'python-pulsectl')
+    optdepends=(
+        'plasma-desktop: the Plasma session the daemon drives (KWin script, OSD, shortcuts)'
+        'kwin: loads the script that reports the focused window'
+        'kglobalacceld: binds the hotkeys in System Settings -> Shortcuts'
+        'pipewire-pulse: the audio server the daemon talks to'
+        'appvol-gui: the window and the tray icon for the profiles'
+    )
+    install=appvol.install
+
+    cd "$_sourcedir"
 
     local site
-    site="$(python -c 'import sys; print("lib/python{}.{}/site-packages".format(*sys.version_info[:2]))')"
+    site="$(_site)"
 
     install -d "$pkgdir/usr/$site/appvol"
     install -m644 appvol/*.py "$pkgdir/usr/$site/appvol/"
@@ -55,4 +68,36 @@ package() {
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
     install -d "$pkgdir/usr/share/doc/$pkgname/docs"
     install -m644 docs/*.md "$pkgdir/usr/share/doc/$pkgname/docs/"
+}
+
+package_appvol-gui() {
+    pkgdesc="Window and tray icon for appvol (PySide6 and Kirigami)"
+    depends=('appvol' 'pyside6' 'kirigami' 'qqc2-desktop-style' 'breeze-icons')
+    optdepends=('plasma-desktop: the desktop whose shortcut dialog the window opens')
+
+    cd "$_sourcedir"
+
+    local site
+    site="$(_site)"
+
+    # The QML files sit next to the Python ones: the window loads them from the
+    # filesystem, so no Qt resource compilation is needed.
+    install -d "$pkgdir/usr/$site/appvol/gui/qml"
+    install -m644 appvol/gui/*.py "$pkgdir/usr/$site/appvol/gui/"
+    install -m644 appvol/gui/qml/*.qml "$pkgdir/usr/$site/appvol/gui/qml/"
+
+    install -d "$pkgdir/usr/bin"
+    printf '#!/bin/sh\nexec python3 -m appvol.gui "$@"\n' >"$pkgdir/usr/bin/appvol-gui"
+    chmod 755 "$pkgdir/usr/bin/appvol-gui"
+
+    install -d "$pkgdir/usr/share/applications"
+    sed 's|@APPVOL_GUI@|/usr/bin/appvol-gui|g' desktop/org.appvol.gui.desktop.in \
+        >"$pkgdir/usr/share/applications/org.appvol.gui.desktop"
+
+    # The name of the icon equals the application id, so the launcher entry, the
+    # window and the tray icon all find the same file.
+    install -Dm644 desktop/appvol.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/appvol.svg"
+
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

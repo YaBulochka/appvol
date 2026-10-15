@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The appvol icon: a speaker with sound waves, drawn in the colour the icon
+  theme asks for, so it works on a light and on a dark scheme.
+
+  The icon name is the same as the application id, so the launcher, the window
+  and the tray icon all pick it up from one file.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs id="defs">
+    <style type="text/css" id="current-color-scheme">
+      .ColorScheme-Text {
+        color:#232629;
+      }
+    </style>
+  </defs>
+  <g class="ColorScheme-Text" style="fill:currentColor">
+    <path style="fill:currentColor;fill-opacity:1;stroke:none"
+          d="M 6,24 L 19,24 L 33,12 L 33,52 L 19,40 L 6,40 Z"/>
+    <path style="fill:none;stroke:currentColor;stroke-width:4;stroke-linecap:round;stroke-linejoin:round"
+          d="M 41,23 A 12,12 0 0 1 41,41"/>
+    <path style="fill:none;stroke:currentColor;stroke-width:4;stroke-linecap:round;stroke-linejoin:round"
+          d="M 49,14 A 24,24 0 0 1 49,50"/>
+  </g>
+</svg>

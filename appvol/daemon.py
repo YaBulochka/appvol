@@ -38,6 +38,7 @@ from gi.repository import GLib, GLibUnix
 import pulsectl
 
 from . import __version__
+from .apps import group_streams
 from .config import Config, load as load_config
 from .focus import Focus, focus_from_dbus, read_parent_pid
 from .icon import resolvable, resolve as resolve_icon
@@ -61,7 +62,7 @@ from .profiles import (
     validate_id,
 )
 from .profiles import default_path as default_profiles_path
-from .volume import DOWN, UP, changed, peak, target_channels
+from .volume import DOWN, UP, absolute, changed, peak, target_channels
 
 log = logging.getLogger("appvol.daemon")
 
@@ -444,14 +445,25 @@ class Daemon(dbus.service.Object):
             "profiles": [profile.summary() for profile in self.profiles],
         }
 
-    def _toggle_profile(self, profile_id: str) -> dict:
+    def _toggle_profile(self, profile_id: str, osd: bool = True) -> dict:
         """Switch to a profile, or back to Active when it is already current."""
-        profile = active_profile() if profile_id in ("", ACTIVE_ID) else self._profile(profile_id)
-        self.state.selection.toggle(profile.id, time.monotonic())
+        self.state.selection.toggle(self._switch_target(profile_id).id, time.monotonic())
         log.info("profile: %s", self.state.selection.current)
-        return self._feedback(self.current_profile())
+        return self._feedback(self.current_profile(), osd)
 
-    def _feedback(self, profile: Profile) -> dict:
+    def _switch_target(self, profile_id: str) -> Profile:
+        """The profile a switch refers to; an empty id means the built-in one."""
+        if profile_id in ("", ACTIVE_ID):
+            return active_profile()
+        return self._profile(profile_id)
+
+    def _switch_profile(self, profile_id: str, osd: bool = True) -> dict:
+        """Make a profile current, the explicit form of the toggle."""
+        self.state.selection.select(self._switch_target(profile_id).id, time.monotonic())
+        log.info("profile: %s", self.state.selection.current)
+        return self._feedback(self.current_profile(), osd)
+
+    def _feedback(self, profile: Profile, osd: bool = True) -> dict:
         """Report what a profile looks like now, for a profile switch."""
         streams, result = self._resolve(profile)
         by_index = {stream.index: stream for stream in streams}
@@ -471,11 +483,12 @@ class Daemon(dbus.service.Object):
         if targets:
             percent = int(round(max(peak(stream.volume) for stream in targets) * 100))
             payload["percent"] = percent
-            self.osd.volume_changed(percent, icon=icon, name=name)
+            if osd:
+                self.osd.volume_changed(percent, icon=icon, name=name)
         elif profile.mode == MODE_FOCUS:
             log.info("nothing to show for %s: %s", profile.id, result.reason)
-        else:
-            # A profile key press always deserves an answer, even a negative one.
+        elif osd:
+            # A profile key press deserves an answer, even a negative one.
             self.osd.text(icon, "no stream")
         return payload
 
@@ -567,6 +580,40 @@ class Daemon(dbus.service.Object):
         """Toggle mute on the streams of ``profile_id``."""
         return json.dumps(self._toggle_mute(self._profile(str(profile_id))))
 
+    @dbus.service.method(IFACE, in_signature="sd", out_signature="s")
+    def SetVolume(self, profile_id, percent) -> str:  # noqa: N802
+        """Set the volume of ``profile_id`` to ``percent``, without the OSD.
+
+        For a slider that sends a value per movement; the GUI shows its own
+        feedback instead of asking for an OSD per pixel.
+        """
+        profile = self._profile(str(profile_id))
+        return json.dumps(self._set_volume(profile, _amount(percent, "percent")))
+
+    @dbus.service.method(IFACE, in_signature="sb", out_signature="s")
+    def SetMute(self, profile_id, muted) -> str:  # noqa: N802
+        """Set mute on the streams of ``profile_id`` to ``muted``, without the OSD."""
+        return json.dumps(self._set_mute(self._profile(str(profile_id)), bool(muted)))
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def Applications(self) -> str:  # noqa: N802
+        """Report the applications that are playing right now."""
+        return json.dumps(self._applications())
+
+    @dbus.service.method(IFACE, in_signature="sb", out_signature="s")
+    def SwitchProfile(self, profile_id, osd) -> str:  # noqa: N802
+        """Make ``profile_id`` current, without the toggle the keys do.
+
+        ``osd`` asks for the OSD feedback: the tray wants it, a window that shows
+        the change already does not need it.
+        """
+        return json.dumps(self._switch_profile(str(profile_id), bool(osd)))
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def Overview(self) -> str:  # noqa: N802
+        """Report every profile with its live volume, mute state and match count."""
+        return json.dumps(self._overview())
+
     @dbus.service.method(IFACE, in_signature="s", out_signature="s")
     def ToggleProfile(self, profile_id) -> str:  # noqa: N802
         """Switch to ``profile_id``, or back to Active when it is current."""
@@ -620,11 +667,13 @@ class Daemon(dbus.service.Object):
 
     def _resolve(self, profile: Profile) -> tuple[list[Stream], MatchResult]:
         streams = self.pulse.streams()
+        return streams, self._match(profile, streams)
+
+    def _match(self, profile: Profile, streams: Sequence[Stream]) -> MatchResult:
+        """Match a profile against a snapshot of streams, without any I/O."""
         if profile.mode == MODE_FOCUS:
-            result = match_streams(self.state.focus, streams, parent_of=read_parent_pid)
-        else:
-            result = match_profile(profile, streams)
-        return streams, result
+            return match_streams(self.state.focus, streams, parent_of=read_parent_pid)
+        return match_profile(profile, streams)
 
     def _appearance(
         self, profile: Profile, result: MatchResult, by_index: dict[int, Stream]
@@ -812,6 +861,167 @@ class Daemon(dbus.service.Object):
             self.osd.text(icon, "Unmuted")
         return payload
 
+    def _payload(self, action: str, profile: Profile, result: MatchResult) -> dict:
+        """Result skeleton shared by the control methods."""
+        return {
+            "ok": True,
+            "action": action,
+            "profile": profile.summary(),
+            "matched": result.count,
+            "match_step": result.step,
+            "reason": result.reason,
+            "percent": None,
+            "muted": None,
+            "osd": {},
+            "streams": [],
+        }
+
+    def _entry(self, stream: Stream, volume: Sequence[float]) -> dict:
+        """Per-stream record of the absolute and relative volume methods."""
+        return {
+            "index": stream.index,
+            "label": stream.display_name,
+            "from": _percent_tuple(stream.volume or [0.0]),
+            "to": _percent_tuple(volume),
+            "muted": stream.mute,
+        }
+
+    def _set_volume(self, profile: Profile, percent: float) -> dict:
+        """Set the volume of a profile to ``percent``, keeping the balance.
+
+        Absolute counterpart of :meth:`_adjust`, and silent on the OSD: a slider
+        sends one call per movement, and an OSD per pixel of travel would only
+        flicker.  The caller draws its own feedback.
+        """
+        streams, result = self._resolve(profile)
+        payload = self._payload("set", profile, result)
+        if not result.matched:
+            log.info("nothing to set: %s", result.reason)
+            return payload
+
+        by_index = {stream.index: stream for stream in streams}
+        ceiling = self._max_volume_of(profile)
+        target = min(percent / 100.0, ceiling)
+        peaks: list[float] = []
+        for index in result.indices:
+            stream = by_index[index]
+            old = list(stream.volume) or [0.0]
+            new = absolute(old, target, ceiling)
+            peaks.append(peak(new))
+            entry = self._entry(stream, new)
+            if changed(old, new):
+                self.pulse.set_volume(index, new)
+                entry["applied"] = True
+            else:
+                entry["applied"] = False
+            payload["streams"].append(entry)
+
+        payload["percent"] = int(round(max(peaks) * 100)) if peaks else None
+        log.info(
+            "set %s%% on %s (streams: %s)",
+            payload["percent"],
+            profile.display_name,
+            result.indices,
+        )
+        return payload
+
+    def _set_mute(self, profile: Profile, muted: bool) -> dict:
+        """Set mute on the streams of a profile, unlike the aggregate toggle."""
+        streams, result = self._resolve(profile)
+        payload = self._payload("mute", profile, result)
+        payload["muted"] = muted
+        if not result.matched:
+            log.info("nothing to set: %s", result.reason)
+            return payload
+
+        by_index = {stream.index: stream for stream in streams}
+        peaks: list[float] = []
+        for index in result.indices:
+            stream = by_index[index]
+            if stream.mute != muted:
+                self.pulse.set_mute(index, muted)
+            peaks.append(peak(stream.volume))
+            payload["streams"].append(
+                {
+                    "index": stream.index,
+                    "label": stream.display_name,
+                    "muted": muted,
+                    "percent": int(round(peak(stream.volume) * 100)),
+                }
+            )
+
+        payload["percent"] = int(round(max(peaks) * 100)) if peaks else None
+        log.info(
+            "%s %s (streams: %s)",
+            "muted" if muted else "unmuted",
+            profile.display_name,
+            result.indices,
+        )
+        return payload
+
+    def _applications(self) -> dict:
+        """Applications playing right now, for the profile editor and ``appvol apps``."""
+        streams = self.pulse.streams()
+        by_index = {stream.index: stream for stream in streams}
+        entries = []
+        for application in group_streams(streams):
+            first = by_index[application.indices[0]]
+            entries.append({**application.summary(), "icon": resolve_icon(props=first.props) or ""})
+        return {"ok": True, "applications": entries, "current": self.state.selection.current}
+
+    def _overview(self) -> dict:
+        """The panel the GUI draws: every profile with its live state.
+
+        The built-in Active profile comes first, because it is also a target the
+        user switches between.  A dead PipeWire connection is not fatal here: the
+        profiles are still worth showing, only the live numbers are missing.
+        """
+        try:
+            streams: list[Stream] | None = self.pulse.streams()
+        except RuntimeError as exc:
+            log.warning("cannot read the streams for the overview: %s", exc)
+            streams = None
+
+        by_index = {stream.index: stream for stream in streams} if streams else {}
+        current = self.state.selection.current
+        entries = []
+        for profile in (active_profile(), *self.profiles):
+            entry = {
+                **profile.summary(),
+                "builtin": profile.id == ACTIVE_ID,
+                "current": profile.id == current,
+                "matched": None,
+                "percent": None,
+                "muted": None,
+                "reason": "",
+            }
+            if streams is not None:
+                result = self._match(profile, streams)
+                targets = [by_index[index] for index in result.indices]
+                entry.update(
+                    {
+                        "matched": result.count,
+                        "reason": result.reason,
+                        "percent": int(round(max(peak(stream.volume) for stream in targets) * 100))
+                        if targets
+                        else None,
+                        "muted": all(stream.mute for stream in targets) if targets else None,
+                    }
+                )
+            entries.append(entry)
+
+        return {
+            "ok": True,
+            "current": current,
+            "idle_timeout": self.config.profile_idle_timeout,
+            "config": {
+                "step": self.config.step,
+                "max_volume": self.config.max_volume,
+                "osd": self.config.osd,
+            },
+            "profiles": entries,
+        }
+
     def _list(self) -> dict:
         profile = self.current_profile()
         streams, result = self._resolve(profile)
@@ -864,15 +1074,20 @@ def _direction(value: object) -> str:
     return text
 
 
-def _step(value: object) -> float:
-    """Validate a step in percent; zero means "the profile's or the config's"."""
+def _amount(value: object, what: str = "step") -> float:
+    """Validate a non-negative number of percent."""
     try:
         number = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        raise _invalid_argument(f"step must be a number, got {value!r}") from None
+        raise _invalid_argument(f"{what} must be a number, got {value!r}") from None
     if number < 0:
-        raise _invalid_argument(f"step must not be negative, got {number}")
+        raise _invalid_argument(f"{what} must not be negative, got {number}")
     return number
+
+
+def _step(value: object) -> float:
+    """Validate a step in percent; zero means "the profile's or the config's"."""
+    return _amount(value, "step")
 
 
 def _names(values: Iterable[object]) -> tuple[str, ...]:

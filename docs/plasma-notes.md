@@ -119,6 +119,13 @@ one, and the code follows what the system actually does.
 * There is no deep link into the shortcut list. `systemsettings kcm_keys` opens
   it, and the entries are found by name: "appvol" holds the three volume actions
   from the desktop file, "appvol profiles" holds one action per profile.
+* The keys can be read back with `shortcutKeys(actionId)` against
+  `/kglobalaccel`, which answers `a(ai)` in the same shape `setShortcutKeys`
+  takes: one structure per shortcut, first int `key | modifiers`, three zeros. An
+  action with no key answers with a single structure of zeros rather than an empty
+  array, so "unbound" has to be tested as `key == 0`. Qt turns the integer back
+  into the text the KCM shows, `QKeySequence(16777330).toString()` being
+  `Volume Up`, which is how the window labels each profile.
 
 ## Audio backend
 

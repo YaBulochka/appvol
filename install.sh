@@ -4,6 +4,7 @@
 #   ./install.sh                # install or upgrade into ~/.local
 #   ./install.sh --service      # ... and start the daemon with the session
 #   ./install.sh --prefix DIR   # install into DIR instead of ~/.local
+#   ./install.sh --no-gui       # skip the window and the tray icon
 #   ./install.sh --uninstall    # remove what this script installed
 #   ./install.sh --help
 #
@@ -13,6 +14,11 @@
 #   <prefix>/bin/appvol, appvold, ...      symlinks to the launchers there
 #   ~/.config/systemd/user/appvold.service the user unit (ExecStart is absolute)
 #   ~/.local/share/applications/org.appvol.desktop   the KDE shortcut entry
+#
+# With PySide6 installed it also adds the window and the tray icon:
+#
+#   ~/.local/share/applications/org.appvol.gui.desktop
+#   ~/.local/share/icons/hicolor/scalable/apps/appvol.svg
 #
 # Nothing outside those paths is touched, and no root privileges are needed.
 # Arch users may prefer the pacman package instead: see packaging/PKGBUILD.
@@ -27,18 +33,23 @@ data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
 
 install_dir="$prefix/share/appvol"
 unit="$config_home/systemd/user/appvold.service"
+gui_entry="$data_home/applications/org.appvol.gui.desktop"
+gui_icon="$data_home/icons/hicolor/scalable/apps/appvol.svg"
 
 usage() {
-    sed -n '2,18p' "$self" | sed 's/^# \{0,1\}//'
+    sed -n '2,22p' "$self" | sed 's/^# \{0,1\}//'
     echo
-    echo "Options: --service  --prefix DIR  --uninstall  --help"
+    echo "Options: --service  --prefix DIR  --no-gui  --uninstall  --help"
 }
 
 with_service=no
+with_gui=auto
 action=install
 while [ $# -gt 0 ]; do
     case "$1" in
         --service) with_service=yes ;;
+        --no-gui) with_gui=no ;;
+        --gui) with_gui=yes ;;
         --uninstall|--remove) action=uninstall ;;
         --prefix)
             [ $# -ge 2 ] || { echo "appvol: --prefix needs a directory" >&2; exit 2; }
@@ -64,6 +75,16 @@ missing_modules() {
     for module in dbus gi pulsectl; do
         "$python" -c "import $module" >/dev/null 2>&1 || echo "$module"
     done
+}
+
+# The window and the tray icon need PySide6; the daemon and the CLI do not, so a
+# missing PySide6 is not a failure, only a note at the end.
+want_gui() {
+    case "$with_gui" in
+        yes) return 0 ;;
+        no) return 1 ;;
+    esac
+    "$python" -c "import PySide6" >/dev/null 2>&1
 }
 
 check_dependencies() {
@@ -95,9 +116,10 @@ uninstall() {
         "$install_dir/bin/appvol-shortcuts" --remove
     fi
     local name
-    for name in appvol appvold appvol-shortcuts; do
+    for name in appvol appvold appvol-shortcuts appvol-gui; do
         rm -f "$prefix/bin/$name"
     done
+    rm -f "$gui_entry" "$gui_icon"
     rm -rf "$install_dir"
     # Only succeeds when nothing else lives there.
     rmdir "$prefix/bin" "$prefix/share" 2>/dev/null || true
@@ -148,6 +170,9 @@ install -d "$prefix/bin"
 for name in appvol appvold appvol-shortcuts; do
     ln -sfn "$install_dir/bin/$name" "$prefix/bin/$name"
 done
+if want_gui; then
+    ln -sfn "$install_dir/bin/appvol-gui" "$prefix/bin/appvol-gui"
+fi
 echo "appvol: launchers linked into $prefix/bin"
 
 install -d "$(dirname "$unit")"
@@ -155,6 +180,17 @@ sed "s|@APPVOLD@|$install_dir/bin/appvold|" "$root/systemd/appvold.service.in" >
 echo "appvol: systemd user unit installed as $unit"
 
 "$install_dir/bin/appvol-shortcuts"
+
+if want_gui; then
+    install -d "$(dirname "$gui_entry")" "$(dirname "$gui_icon")"
+    sed "s|@APPVOL_GUI@|$install_dir/bin/appvol-gui|g" \
+        "$root/desktop/org.appvol.gui.desktop.in" >"$gui_entry"
+    install -m644 "$root/desktop/appvol.svg" "$gui_icon"
+    echo "appvol: window and tray icon installed (appvol-gui)"
+elif [ "$with_gui" = auto ]; then
+    echo "appvol: note: PySide6 is missing, so the window and the tray icon were skipped"
+    echo "        install it (Arch: sudo pacman -S pyside6) and run this script again"
+fi
 
 case ":$PATH:" in
     *":$prefix/bin:"*) ;;

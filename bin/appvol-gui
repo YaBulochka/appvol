@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Launcher for the appvol window.
+#
+# Finds the appvol package the same way bin/appvold does, so a checkout works
+# without installing:
+#   1. $APPVOL_ROOT, if set;
+#   2. the checkout this script lives in (works through symlinks);
+#   3. ~/.local/share/appvol, for the "copy the project" install layout.
+set -euo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+python="${PYTHON:-python3}"
+candidates=("${APPVOL_ROOT:-}" "$(dirname "$self")/.." "$HOME/.local/share/appvol")
+
+for root in "${candidates[@]}"; do
+    [ -n "$root" ] || continue
+    if [ -f "$root/appvol/__init__.py" ]; then
+        exec env PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}" "$python" -m appvol.gui "$@"
+    fi
+done
+
+cat >&2 <<'EOF'
+appvol-gui: cannot find the appvol package.
+        Symlink the launcher from the checkout:
+            ln -sf ~/Projects/appvol/bin/appvol-gui ~/.local/bin/appvol-gui
+        or copy the project to ~/.local/share/appvol, or set APPVOL_ROOT.
+EOF
+exit 1

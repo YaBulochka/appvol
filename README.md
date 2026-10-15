@@ -11,10 +11,12 @@ appvol up      # +5% for the focused application
 appvol down    # -5%
 appvol mute    # toggle mute
 appvol list    # streams, cached focus, profiles, and which match step fired
+appvol apps    # what is playing right now, with the identifiers profiles use
 ```
 
 A user daemon on the session bus, a KWin script that reports the focused window,
-and a thin client for the hotkeys. No root, no X11 tools, no GUI.
+and a thin client for the hotkeys. No root, no X11 tools. An optional window and
+tray icon for the profiles come with the `appvol-gui` package.
 
 ## Requirements
 
@@ -24,6 +26,10 @@ and a thin client for the hotkeys. No root, no X11 tools, no GUI.
 | `python-dbus` | `dbus` | session bus: the daemon API and the OSD |
 | `python-gobject` | `gi` | the GLib main loop the daemon runs in |
 | `python-pulsectl` | `pulsectl` | stream volume through pipewire-pulse |
+
+The window and the tray icon are optional and need more: `pyside6`, `kirigami`,
+`qqc2-desktop-style` and `breeze-icons`. The daemon and the CLI never import
+them, so a minimal install can leave them out. See [docs/gui.md](docs/gui.md).
 
 The rest is the session appvol drives, and your distribution provides it: KDE
 Plasma 6 on Wayland (`kwin` for the focus, `plasmashell` for the OSD),
@@ -36,15 +42,20 @@ for your distribution.
 pacman package (Arch), which declares the dependencies and installs into `/usr`:
 
 ```sh
-bin/appvol-release --package           # build dist/*.pkg.tar.zst
-sudo pacman -U dist/appvol-*.pkg.tar.zst
+bin/appvol-release --package                   # build dist/*.pkg.tar.zst
+sudo pacman -U dist/appvol-*.pkg.tar.zst       # the daemon, the CLI and the GUI
 systemctl --user daemon-reload && systemctl --user enable --now appvold
 ```
+
+The release builds two packages: `appvol` for the daemon and the CLI, and
+`appvol-gui` for the window and the tray icon, which pulls PySide6. Installing
+only the first one keeps a machine without Qt small.
 
 Per user, any distribution, no root:
 
 ```sh
 ./install.sh --service     # into ~/.local; --uninstall reverts it
+./install.sh --no-gui      # ... without the window and the tray icon
 ```
 
 From the checkout, without installing anything:
@@ -98,6 +109,19 @@ per profile there, next to the three volume keys under **appvol**. While a profi
 is current, the volume keys follow it; the OSD captions the profile name. Five
 minutes without a press on the profile return the keys to the Active profile.
 
+## Window and tray icon
+
+`appvol-gui` (or `bin/appvol-gui` from the checkout) opens a small window listing
+every profile with its live volume, its scope and the key bound to it, and a tray
+icon with the profiles, the three volume actions and **Quit**. The sliders and the
+mute switches act on the live streams, **New Profile** and **Edit** open a form
+whose application list is what is playing right now, and **Bind Keys…** opens
+System Settings → Shortcuts, where the profiles are listed under **appvol
+profiles**. The window shows the binding and never sets one.
+
+It needs PySide6, Kirigami, `qqc2-desktop-style` and `breeze-icons`; the daemon
+and the CLI run without any of them. [docs/gui.md](docs/gui.md) has the details.
+
 ## Config
 
 `~/.config/appvol/config.toml`, every key optional:
@@ -114,6 +138,7 @@ profile_idle_timeout = 300   # seconds before a profile returns to Active, 0 dis
 
 ```sh
 appvol list                        # focus, streams, why nothing matched
+appvol apps                        # what is playing, and how appvol names it
 appvol profile list                # profiles and the current one
 appvold -v                         # verbose daemon log
 journalctl --user -u appvold -f    # when it runs under systemd
@@ -127,6 +152,9 @@ journalctl --user -u appvold -f    # when it runs under systemd
   on the list in System Settings; assign the key there.
 * A profile matches nothing: `appvol list` with the profile current shows the
   reason, and `appvol up --profile NAME` answers without switching.
+* The window does not start: PySide6 is missing, or was installed after the last
+  `install.sh`. `python3 -c "import PySide6"` answers it; the tray icon also needs
+  a system tray in the panel.
 * No OSD: check `osd = true` and a normal Plasma session, where `plasmashell`
   owns `org.freedesktop.Notifications`. The daemon logs `cannot show volume OSD`
   when the call fails.
@@ -136,6 +164,7 @@ journalctl --user -u appvold -f    # when it runs under systemd
 ## Documentation
 
 * [docs/architecture.md](docs/architecture.md) — components, D-Bus API, matching, lifecycle
+* [docs/gui.md](docs/gui.md) — the window and the tray icon
 * [docs/osd.md](docs/osd.md) — the OSD and how the application icon is chosen
 * [docs/plasma-notes.md](docs/plasma-notes.md) — what Plasma 6.7.5 actually does
 * [docs/development.md](docs/development.md) — layout, tests, release process

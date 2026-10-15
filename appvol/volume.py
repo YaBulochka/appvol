@@ -63,6 +63,32 @@ def target_channels(
     return [min(value * scale, max_volume) for value in values]
 
 
+def absolute(
+    channels: Sequence[float],
+    value: float,
+    max_volume: float,
+) -> list[float]:
+    """Move the peak channel to ``value``, preserving the balance.
+
+    Absolute counterpart of :func:`target_channels`, used by the GUI sliders and
+    the ``SetVolume`` call.  Silent channels carry no balance to preserve, so they
+    are lifted evenly.
+    """
+    values = [float(channel) for channel in channels]
+    if not values:
+        return values
+
+    ceiling = max(0.0, float(max_volume))
+    target = min(max(0.0, float(value)), ceiling)
+    current = peak(values)
+
+    if current <= 0.0:
+        return [target] * len(values)
+
+    scale = target / current
+    return [min(channel * scale, ceiling) for channel in values]
+
+
 def changed(old: Sequence[float], new: Sequence[float]) -> bool:
     """True when two channel lists differ by more than a rounding epsilon."""
     if len(old) != len(new):

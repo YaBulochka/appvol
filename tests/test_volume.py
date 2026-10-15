@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from appvol.volume import DOWN, UP, changed, peak, percent, target_channels
+from appvol.volume import DOWN, UP, absolute, changed, peak, percent, target_channels
 
 STEP = 0.05
 MAX = 1.0
@@ -44,6 +44,31 @@ class TargetChannelsTests(unittest.TestCase):
 
     def test_empty_channels(self) -> None:
         self.assertEqual(target_channels([], UP, STEP, MAX), [])
+
+
+class AbsoluteTests(unittest.TestCase):
+    def test_absolute_moves_the_peak_and_keeps_the_balance(self) -> None:
+        result = absolute([0.5, 0.25], 0.6, MAX)
+        self.assertAlmostEqual(result[0], 0.6)
+        self.assertAlmostEqual(result[1], 0.3)
+
+    def test_absolute_is_clamped_at_max(self) -> None:
+        self.assertEqual(absolute([0.5], 1.5, MAX), [1.0])
+
+    def test_absolute_allows_more_than_one_hundred_percent(self) -> None:
+        self.assertEqual(absolute([0.5], 1.2, 1.5), [1.2])
+
+    def test_absolute_lifts_silent_channels_evenly(self) -> None:
+        self.assertEqual(absolute([0.0, 0.0], 0.4, MAX), [0.4, 0.4])
+
+    def test_absolute_to_zero_silences_everything(self) -> None:
+        self.assertEqual(absolute([0.7, 0.3], 0.0, MAX), [0.0, 0.0])
+
+    def test_absolute_rejects_a_negative_value(self) -> None:
+        self.assertEqual(absolute([0.5], -1.0, MAX), [0.0])
+
+    def test_absolute_empty_channels(self) -> None:
+        self.assertEqual(absolute([], 0.5, MAX), [])
 
 
 class HelpersTests(unittest.TestCase):

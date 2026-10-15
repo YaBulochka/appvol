@@ -6,7 +6,7 @@ import contextlib
 import io
 import unittest
 
-from appvol.cli import _print_profiles, _short, build_parser
+from appvol.cli import _print_applications, _print_profiles, _short, build_parser
 
 
 class ParserTests(unittest.TestCase):
@@ -21,6 +21,9 @@ class ParserTests(unittest.TestCase):
 
     def test_mute_takes_a_profile(self) -> None:
         self.assertEqual(build_parser().parse_args(["mute", "--profile", "cs2"]).profile, "cs2")
+
+    def test_apps_takes_no_arguments(self) -> None:
+        self.assertEqual(build_parser().parse_args(["apps"]).command, "apps")
 
     def test_profile_add(self) -> None:
         args = build_parser().parse_args(
@@ -46,6 +49,13 @@ def _render(result: dict) -> str:
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
         _print_profiles(result)
+    return buffer.getvalue()
+
+
+def _render_apps(result: dict) -> str:
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        _print_applications(result)
     return buffer.getvalue()
 
 
@@ -134,6 +144,41 @@ class ProfileTableTests(unittest.TestCase):
     def test_no_profiles_yet_says_how_to_create_one(self) -> None:
         text = _render({"current": "active", "idle_timeout": 300.0, "profiles": []})
         self.assertIn("appvol profile add", text)
+
+
+class ApplicationTableTests(unittest.TestCase):
+    def test_the_table_lists_applications_with_their_identifiers(self) -> None:
+        text = _render_apps(
+            {
+                "applications": [
+                    {
+                        "id": "spotify",
+                        "label": "Spotify",
+                        "percent": 45,
+                        "muted": False,
+                        "panel": False,
+                        "streams": [1],
+                    },
+                    {
+                        "id": "plasmashell",
+                        "label": "plasmashell",
+                        "percent": 30,
+                        "muted": True,
+                        "panel": True,
+                        "streams": [4, 5],
+                    },
+                ]
+            }
+        )
+        self.assertIn("Spotify", text)
+        self.assertIn("spotify", text)
+        self.assertIn("1 stream", text)
+        self.assertIn("2 streams", text)
+        self.assertIn("muted", text)
+        self.assertIn("shell", text)
+
+    def test_an_empty_table_says_so(self) -> None:
+        self.assertIn("nothing", _render_apps({"applications": []}))
 
 
 if __name__ == "__main__":

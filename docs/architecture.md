@@ -9,6 +9,8 @@ KWin script --SetFocus(pid, resourceClass, desktopFileName, caption)--> appvold
 appvol up --AdjustTarget(profile, "up", 0)----------------------------------+
                                                                             |
 kglobalacceld --globalShortcutPressed(profile_spotify)----------------------+
+                                                                            |
+appvol-gui --Overview / SetVolume / SwitchProfile---------------------------+
                                                                             v
                                                      pulsectl -> sink inputs -> OSD
 ```
@@ -43,13 +45,18 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | --- | --- | --- | --- |
 | `SetFocus(pid, resourceClass, desktopFileName, caption)` | `isss -> i` | KWin script | `0`, the script ignores the answer |
 | `Adjust(direction, step)` | `sd -> s` | client | JSON result for the current profile |
-| `AdjustTarget(profile, direction, step)` | `ssd -> s` | client | JSON result for one profile, without switching |
+| `AdjustTarget(profile, direction, step)` | `ssd -> s` | client, tray | JSON result for one profile, without switching |
+| `SetVolume(profile, percent)` | `sd -> s` | window, plugin | JSON result, absolute, without the OSD |
 | `ToggleMute()` | ` -> s` | client | JSON result for the current profile |
-| `ToggleMuteTarget(profile)` | `s -> s` | client | JSON result for one profile |
-| `ToggleProfile(profile)` | `s -> s` | client | switch the profile, answer describes the OSD |
+| `ToggleMuteTarget(profile)` | `s -> s` | client, tray | JSON result for one profile |
+| `SetMute(profile, muted)` | `sb -> s` | window | JSON result, absolute, without the OSD |
+| `ToggleProfile(profile)` | `s -> s` | client, keys | switch the profile, answer describes the OSD |
+| `SwitchProfile(profile, osd)` | `sb -> s` | window, tray | make a profile current, the toggle without the "back" |
 | `Profiles()` | ` -> s` | client | JSON: the profiles and the current one |
-| `AddProfile(id, name, include, exclude, step, max_volume, icon, osd_name)` | `ssasasddss -> s` | client | JSON: the profiles after the change |
-| `RemoveProfile(id)` | `s -> s` | client | JSON: the profiles after the change |
+| `Overview()` | ` -> s` | window, tray | JSON: every profile plus its live volume, mute and match count |
+| `Applications()` | ` -> s` | window editor | JSON: the applications playing now |
+| `AddProfile(id, name, include, exclude, step, max_volume, icon, osd_name)` | `ssasasddss -> s` | client, window | JSON: the profiles after the change |
+| `RemoveProfile(id)` | `s -> s` | client, window | JSON: the profiles after the change |
 | `Reload()` | ` -> s` | client | read `profiles.toml` again |
 | `List()` | ` -> s` | client | JSON: config, profile, focus, match, streams, OSD appearance |
 
@@ -62,6 +69,19 @@ appvold)` and exits with status 1.
 
 A step of zero means "the step of the profile, else the one from the config", so
 a client never has to know which profile is current.
+
+`SetVolume` and `SetMute` are the absolute counterparts of `Adjust` and
+`ToggleMute`, and they stay quiet on the OSD: a slider sends one call per release
+and the window shows the result itself, so an OSD per call would only flicker. The
+three keys and the tray keep the OSD through `Adjust` and `ToggleMute`.
+
+`ToggleProfile` is what a key does: a second press returns to Active. The window
+and the tray need the explicit form, so `SwitchProfile` sets the profile and never
+toggles back. Its `osd` flag says who is watching: the window passes `false`
+(it shows the change), the tray passes `true`, so a switch from the tray menu
+answers like a key press. `Overview` reads PipeWire once and matches every profile
+against that snapshot; an unreachable pipewire-pulse is not fatal there, the
+profiles come back with null for the live numbers.
 
 ## Matching
 
@@ -116,9 +136,9 @@ profile counts as using it, and after `profile_idle_timeout` seconds without one
 the daemon returns to Active and logs the return.
 
 The profiles live in `~/.config/appvol/profiles.toml`, which the daemon reads at
-start and writes on every change, replacing the file in one step. The CLI and a
-future GUI go through the D-Bus API, so there is a single writer; `Reload()` exists
-for hand edits.
+start and writes on every change, replacing the file in one step. The CLI and the
+window both go through the D-Bus API, so there is a single writer; `Reload()`
+exists for hand edits.
 
 ```toml
 [[profile]]
@@ -135,6 +155,41 @@ in System Settings in `kglobalshortcutsrc` across daemon restarts. The three vol
 actions stay where they were, in a service component built from
 `desktop/org.appvol.desktop.in`. [plasma-notes.md](plasma-notes.md) records what
 was verified about both mechanisms.
+
+## GUI
+
+[`appvol/gui/`](../appvol/gui) is optional: it needs PySide6 and the Kirigami QML
+modules, which the daemon and the CLI do not, so the pacman package splits into
+`appvol` and `appvol-gui`. No module of the daemon imports it.
+
+The window is QML and everything around it is Python:
+
+* `app.py` builds the `QApplication`, loads `qml/Main.qml` and owns the tray icon,
+  whose menu is rebuilt from the profile list on every refresh.
+* `bridge.py` is the only object QML sees. It keeps the model (the profiles with
+  their live numbers, the applications playing now) in properties and wraps every
+  daemon call in a slot, so no QML file speaks D-Bus.
+* `client.py` builds and decodes those calls. It is free of Qt and unit tested
+  against a fake proxy.
+* `shortcuts.py` reads the keys bound to the profile actions from KGlobalAccel and
+  renders them with `QKeySequence`, so a profile row can show `Ctrl+Alt+1`.
+* [`appvol/apps.py`](../appvol/apps.py) groups the live streams into applications
+  for that list, with the same identifiers the matcher compares, so what the editor
+  offers is what a profile can select. `appvol apps` prints the same grouping.
+* The QML files are `Main.qml` (the list), `ProfileRow.qml` (one profile with its
+  slider and mute switch), `ProfileEditor.qml` (an overlay sheet) and
+  `ApplicationPicker.qml` (what is playing right now).
+
+The window reads through `Overview`, which returns every profile with its live
+percent, mute state and match count, and writes through `SetVolume`, `SetMute`,
+`SwitchProfile`, `AddProfile` and `RemoveProfile`. A slider sends one call when the
+finger lifts, not per movement, and the editor writes a profile in one piece, so
+`profiles.toml` never sees a half-finished edit.
+
+The first GUI does not assign keys: it shows the binding and opens
+`systemsettings kcm_keys`, and the user binds the profile actions there. No part
+of appvol writes to `kglobalshortcutsrc` itself. [gui.md](gui.md) describes what
+the window and the tray offer.
 
 ## Volume
 

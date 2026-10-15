@@ -66,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_profile_option(mute)
 
     sub.add_parser("list", help="show streams, cached focus, profiles and the match result")
+    sub.add_parser("apps", help="applications playing right now, with their identifiers")
 
     profile = sub.add_parser("profile", help="manage profiles")
     actions = profile.add_subparsers(dest="profile_command", required=True)
@@ -195,6 +196,27 @@ def _print_list(result: dict) -> None:
         )
 
 
+def _print_applications(result: dict) -> None:
+    applications = result.get("applications", [])
+    if not applications:
+        print("nothing is playing right now")
+        return
+    print("applications:")
+    for application in applications:
+        flags = []
+        if application.get("muted"):
+            flags.append("muted")
+        if application.get("panel"):
+            flags.append("shell")
+        streams = len(application.get("streams", []))
+        suffix = f"  ({', '.join(flags)})" if flags else ""
+        print(
+            f"  {application.get('percent', 0):>3}%  {application.get('label', ''):<22}"
+            f" {application.get('id', ''):<22} {streams} stream{'' if streams == 1 else 's'}"
+            f"{suffix}"
+        )
+
+
 def _profile(proxy, args) -> tuple[dict, str]:
     """Run a ``profile`` subcommand; returns the payload and how to print it."""
     if args.profile_command == "list":
@@ -251,6 +273,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "list":
             result = json.loads(proxy.List())
             kind = "list"
+        elif args.command == "apps":
+            result = json.loads(proxy.Applications())
+            kind = "apps"
         elif args.command == "profile":
             result, kind = _profile(proxy, args)
         else:  # pragma: no cover - argparse enforces the set
@@ -270,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     elif kind == "list":
         _print_list(result)
+    elif kind == "apps":
+        _print_applications(result)
     elif kind == "profiles":
         _print_profiles(result)
     else:

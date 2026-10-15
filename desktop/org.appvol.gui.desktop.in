@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=appvol
+GenericName=Application Volume Profiles
+Comment=Volume profiles for the audio streams of an application
+Exec=@APPVOL_GUI@
+Icon=appvol
+Terminal=false
+StartupNotify=true
+StartupWMClass=appvol
+Categories=AudioVideo;Audio;
+Keywords=volume;audio;pipewire;profile;stream;
+
+# No X-KDE-Shortcuts here: this file launches the window, while the volume and
+# profile keys of the other file (org.appvol.desktop) stay where they are.
