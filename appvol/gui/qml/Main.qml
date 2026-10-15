@@ -92,7 +92,7 @@ Kirigami.ApplicationWindow {
                             ? "A profile goes back to Active after " + Math.round(bridge.idleTimeout / 60)
                                 + " minutes without use."
                             : "A profile stays current until you switch."
-                        return text + " The keys bound to a profile are set in System Settings → Shortcuts, entry “appvol profiles”."
+                        return text + " The volume keys and the profile keys are set in System Settings → Shortcuts, entry “Appvol”."
                             + " appvol " + bridge.version
                     }
                 }

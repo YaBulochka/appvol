@@ -62,7 +62,6 @@ for required in \
     "appvol-$version/appvol/__init__.py" \
     "appvol-$version/appvol/gui/qml/Main.qml" \
     "appvol-$version/kwin/appvol.js" \
-    "appvol-$version/desktop/org.appvol.desktop.in" \
     "appvol-$version/desktop/org.appvol.gui.desktop.in" \
     "appvol-$version/desktop/appvol.svg" \
     "appvol-$version/systemd/appvold.service.in" \

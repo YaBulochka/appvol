@@ -253,7 +253,7 @@ class ShortcutKeyTests(unittest.TestCase):
     def test_the_action_id_matches_the_daemon_convention(self) -> None:
         self.assertEqual(
             gui_shortcuts.action_id("profile_spotify", "Spotify"),
-            ["appvol", "profile_spotify", "appvol profiles", "Spotify"],
+            ["appvol", "profile_spotify", "Appvol", "Spotify"],
         )
 
     def test_a_missing_shortcut_server_is_not_fatal(self) -> None:

@@ -42,13 +42,14 @@ button on the left:
   Edit opens the editor below, Remove asks first. Both are disabled for the
   built-in profile.
 * **Keys.** The line under the slider shows the key bound to that profile, or
-  "No key bound". **Bind Keys…** opens System Settings → Shortcuts, where the
-  profiles are listed under **appvol profiles**. The window shows the binding but
+  "No key bound". **Bind Keys…** opens System Settings → Shortcuts, where every
+  action of appvol is listed under **Appvol**. The window shows the binding but
   never sets one.
 * **Step.** The value the volume keys move by sits in the same row, so it can be
-  changed without opening the editor. A stream profile may hand the choice back
-  with 0, which means "the global step"; the Active row shows that global step and
-  writes it to `config.toml` when it changes.
+  changed without opening the editor. The row always shows the number the keys
+  really use, 5 % by default; the first change writes that step into the profile,
+  and the Active row writes it to `config.toml`. The editor keeps the extra option
+  of 0, "follow the global step".
 * **Footer.** When the keys return to Active after `profile_idle_timeout`, and the
   version of the running installation.
 

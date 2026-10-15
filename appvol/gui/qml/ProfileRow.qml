@@ -17,28 +17,10 @@ Kirigami.AbstractCard {
     readonly property int maximum: Math.max(1, Math.round(
         (profile && profile.max_volume) || (bridge.config.max_volume) || 150))
     readonly property real globalStep: bridge.config.step || 5
-    // The built-in profile has no entry of its own: its step is the global one,
-    // and zero has no meaning there.
-    readonly property bool ownStep: profile && !profile.builtin
-    readonly property real stepValue: {
-        if (!profile) {
-            return globalStep
-        }
-        if (profile.builtin) {
-            return profile.step || globalStep
-        }
-        return profile.step || 0
-    }
-    readonly property string stepHint: card.ownStep
-        ? "The volume keys move this profile by this much. 0 follows the global step of config.toml."
-        : "The volume keys move the focused window by this much; the Active profile keeps its step in config.toml."
-
-    function stepLabel(value) {
-        if (value === 0 && card.ownStep) {
-            return "global " + globalStep + " %"
-        }
-        return Math.round(value) + " %"
-    }
+    // A profile without a step of its own follows the global one, so the row
+    // shows the number the keys really move by and the first change writes it
+    // into the profile.
+    readonly property real stepValue: (profile && profile.step) || globalStep
 
     // The daemon is the source of truth for the volume; the slider follows it
     // unless the user is dragging, in which case it keeps the value under the
@@ -210,12 +192,12 @@ Kirigami.AbstractCard {
             Controls.SpinBox {
                 id: stepBox
                 editable: true
-                from: card.ownStep ? 0 : 1
+                from: 1
                 to: 50
                 value: card.stepValue
-                textFromValue: (value) => card.stepLabel(value)
+                textFromValue: (value) => Math.round(value) + " %"
                 Controls.ToolTip.visible: hovered
-                Controls.ToolTip.text: card.stepHint
+                Controls.ToolTip.text: "The volume keys move by this much"
                 onValueModified: bridge.setStep(card.profile.id, value)
             }
         }

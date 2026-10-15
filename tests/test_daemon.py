@@ -1,7 +1,8 @@
 """Daemon pieces that need no running session bus.
 
-Where the bundled KWin script is looked for, how the profile shortcuts are handed
-to the shortcut server, and which caption a profile gives the OSD.
+Where the bundled KWin script is looked for, how the shortcut actions are handed
+to the shortcut server and dispatched, which caption a profile gives the OSD, and
+what the step of a row writes.
 """
 
 from __future__ import annotations
@@ -116,15 +117,40 @@ class ShortcutRegistrationTest(unittest.TestCase):
 
         actions.sync([Profile(id="spotify", name="Spotify")])
 
-        action_id = ["appvol", "profile_spotify", "appvol profiles", "Spotify"]
+        action_id = ["appvol", "profile_spotify", "Appvol", "Spotify"]
         self.assertEqual(
-            interface.calls,
+            interface.calls[-3:],
             [
                 ("doRegister", action_id),
                 ("shortcutKeys", action_id),
                 ("setShortcutKeys", action_id, ["Ctrl+Alt+0"], daemon.KGA_SET_PRESENT),
             ],
         )
+
+    def test_the_same_component_carries_the_volume_and_the_cycling_keys(self) -> None:
+        # One entry in System Settings: the volume actions used to live in a
+        # desktop file of their own, which Plasma listed next to the profiles.
+        interface = RecordingInterface()
+        actions = RecordingActions(interface)
+
+        actions.sync([])
+
+        registered = [call[1] for call in interface.calls if call[0] == "doRegister"]
+        self.assertEqual(
+            registered,
+            [
+                ["appvol", "volume_up", "Appvol", "Volume up"],
+                ["appvol", "volume_down", "Appvol", "Volume down"],
+                ["appvol", "volume_mute", "Appvol", "Toggle mute"],
+                ["appvol", "next_profile", "Appvol", "Next profile"],
+                ["appvol", "previous_profile", "Appvol", "Previous profile"],
+            ],
+        )
+        self.assertEqual(actions.actions, tuple(name for name, _label in daemon.FIXED_ACTIONS))
+
+    def test_the_component_is_named_appvol(self) -> None:
+        self.assertEqual(daemon.KGA_COMPONENT, "appvol")
+        self.assertEqual(daemon.KGA_COMPONENT_FRIENDLY, "Appvol")
 
     def test_the_present_flag_keeps_its_wire_value(self) -> None:
         # KGlobalAccelD::SetShortcutFlag::SetPresent; the number is what the
@@ -139,8 +165,11 @@ class ShortcutRegistrationTest(unittest.TestCase):
 
         actions.sync([Profile(id="music")])
 
-        written = [call for call in interface.calls if call[0] == "setShortcutKeys"]
-        self.assertEqual(written[0][2], ["Meta+Alt+S"])
+        written = {
+            call[1][1]: call[2] for call in interface.calls if call[0] == "setShortcutKeys"
+        }
+        self.assertEqual(written["profile_music"], ["Meta+Alt+S"])
+        self.assertTrue(all(keys == ["Meta+Alt+S"] for keys in written.values()))
 
     def test_the_action_of_a_removed_profile_is_dropped(self) -> None:
         interface = RecordingInterface()
@@ -151,7 +180,10 @@ class ShortcutRegistrationTest(unittest.TestCase):
         actions.sync([Profile(id="spotify")])
 
         self.assertIn(("unregister", "appvol", "profile_desktop"), interface.calls)
-        self.assertEqual(actions.actions, ("profile_spotify",))
+        self.assertEqual(
+            actions.actions,
+            (*tuple(name for name, _label in daemon.FIXED_ACTIONS), "profile_spotify"),
+        )
 
     def test_a_press_reaches_the_callback(self) -> None:
         pressed: list[str] = []
@@ -170,6 +202,95 @@ class ShortcutRegistrationTest(unittest.TestCase):
         self.assertEqual(handler, actions._pressed)
         self.assertEqual(rule["signal_name"], "globalShortcutPressed")
         self.assertEqual(rule["path"], "/component/appvol")
+
+
+class ShortcutDispatchTest(unittest.TestCase):
+    """Every key of the component is answered by the daemon itself."""
+
+    def daemon_with(self, profiles=()):
+        app = mock.Mock()
+        app.profiles = list(profiles)
+        return app
+
+    def test_the_volume_keys_run_the_volume_code(self) -> None:
+        app = self.daemon_with()
+
+        daemon.Daemon.on_shortcut(app, daemon.ACTION_VOLUME_UP)
+        app._adjust.assert_called_once_with(daemon.UP, 0.0)
+
+        app._adjust.reset_mock()
+        daemon.Daemon.on_shortcut(app, daemon.ACTION_VOLUME_DOWN)
+        app._adjust.assert_called_once_with(daemon.DOWN, 0.0)
+
+    def test_the_mute_key_toggles(self) -> None:
+        app = self.daemon_with()
+        daemon.Daemon.on_shortcut(app, daemon.ACTION_VOLUME_MUTE)
+        app._toggle_mute.assert_called_once_with()
+
+    def test_the_cycling_keys_step_in_both_directions(self) -> None:
+        app = self.daemon_with()
+
+        daemon.Daemon.on_shortcut(app, daemon.ACTION_NEXT_PROFILE)
+        app._cycle_profile.assert_called_once_with(1)
+
+        app._cycle_profile.reset_mock()
+        daemon.Daemon.on_shortcut(app, daemon.ACTION_PREVIOUS_PROFILE)
+        app._cycle_profile.assert_called_once_with(-1)
+
+    def test_a_profile_key_toggles_its_own_profile(self) -> None:
+        app = self.daemon_with([Profile(id="spotify")])
+        daemon.Daemon.on_shortcut(app, "profile_spotify")
+        app._toggle_profile.assert_called_once_with("spotify")
+
+    def test_an_action_of_a_removed_profile_is_ignored(self) -> None:
+        app = self.daemon_with([Profile(id="spotify")])
+        daemon.Daemon.on_shortcut(app, "profile_gone")
+        app._toggle_profile.assert_not_called()
+
+    def test_an_unknown_action_is_ignored(self) -> None:
+        app = self.daemon_with()
+        daemon.Daemon.on_shortcut(app, "something_else")
+        app._toggle_profile.assert_not_called()
+        app._adjust.assert_not_called()
+
+
+class CycleProfileTest(unittest.TestCase):
+    """Next and Previous walk the order the window shows, and wrap around."""
+
+    def make(self, profiles=()):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        app = StepDaemon(Path(tmp.name), profiles)
+        # The step files are never written here, only the selection moves.
+        app._feedback = mock.Mock()
+        return app
+
+    def test_next_goes_forward_and_wraps(self) -> None:
+        app = self.make([Profile(id="spotify"), Profile(id="cs2")])
+
+        visited = []
+        for _ in range(4):
+            app._cycle_profile(1)
+            visited.append(app.state.selection.current)
+
+        self.assertEqual(visited, ["spotify", "cs2", "active", "spotify"])
+
+    def test_previous_goes_backwards(self) -> None:
+        app = self.make([Profile(id="spotify"), Profile(id="cs2")])
+        app._cycle_profile(-1)
+        self.assertEqual(app.state.selection.current, "cs2")
+
+    def test_cycling_asks_for_the_osd_of_the_profile_it_lands_on(self) -> None:
+        app = self.make([Profile(id="spotify"), Profile(id="cs2")])
+        app._cycle_profile(1)
+
+        profile, osd = app._feedback.call_args[0][0], app._feedback.call_args[1]["osd"]
+        self.assertEqual((profile.id, osd), ("spotify", True))
+
+    def test_a_session_without_profiles_stays_on_active(self) -> None:
+        app = self.make([])
+        app._cycle_profile(1)
+        self.assertEqual(app.state.selection.current, "active")
 
 
 class ShortcutServerRestartTest(unittest.TestCase):

@@ -55,11 +55,9 @@ package_appvol() {
     printf '#!/bin/sh\nexec python3 -m appvol.daemon "$@"\n' >"$pkgdir/usr/bin/appvold"
     chmod 755 "$pkgdir/usr/bin/appvol" "$pkgdir/usr/bin/appvold"
 
-    # Both templates get absolute paths: the shortcut server has no ~/.local/bin
-    # in PATH, and systemd does not read the user's PATH at all.
-    install -d "$pkgdir/usr/share/applications" "$pkgdir/usr/lib/systemd/user"
-    sed 's|@APPVOL@|/usr/bin/appvol|g' desktop/org.appvol.desktop.in \
-        >"$pkgdir/usr/share/applications/org.appvol.desktop"
+    # The unit gets absolute paths: systemd does not read the user's PATH at all,
+    # and the shortcut server only lives in the session.
+    install -d "$pkgdir/usr/lib/systemd/user"
     sed 's|@APPVOLD@|/usr/bin/appvold|' systemd/appvold.service.in \
         >"$pkgdir/usr/lib/systemd/user/appvold.service"
 

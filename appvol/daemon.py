@@ -87,14 +87,13 @@ KGA_PATH = "/kglobalaccel"
 KGA_IFACE = "org.kde.KGlobalAccel"
 KGA_COMPONENT_IFACE = "org.kde.kglobalaccel.Component"
 
-# The component that carries one action per profile.  It is registered at run
+# The one component every appvol action belongs to.  It is registered at run
 # time, so no .desktop file and no kbuildsycoca run is needed and Plasma lists it
-# in System Settings while the daemon runs.  The three volume actions keep living
-# in the "appvol" service component from the desktop file, hence the different
-# friendly name: System Settings shows two entries, "appvol" and "appvol
-# profiles".
+# in System Settings while the daemon runs.  The volume actions used to live in a
+# desktop file of their own, which made System Settings show a second entry next
+# to the profiles; the daemon answers them directly now.
 KGA_COMPONENT = "appvol"
-KGA_COMPONENT_FRIENDLY = "appvol profiles"
+KGA_COMPONENT_FRIENDLY = "Appvol"
 
 # ``KGlobalAccelD::SetShortcutFlag::SetPresent``.  kglobalacceld grabs a key only
 # for a shortcut whose owner has marked it present (``GlobalShortcut::setActive``
@@ -103,6 +102,24 @@ KGA_COMPONENT_FRIENDLY = "appvol profiles"
 # System Settings shows the binding and ``invokeShortcut`` answers, while a real
 # key press reaches nobody: the key was never grabbed.
 KGA_SET_PRESENT = 2
+
+# The actions of the component that are always there, next to one per profile:
+# the name a key press reports and the label System Settings shows for it.  A
+# fixed action carries no default key, so appvol takes no combination away from
+# anyone; the user assigns them in System Settings like the profile keys.
+ACTION_VOLUME_UP = "volume_up"
+ACTION_VOLUME_DOWN = "volume_down"
+ACTION_VOLUME_MUTE = "volume_mute"
+ACTION_NEXT_PROFILE = "next_profile"
+ACTION_PREVIOUS_PROFILE = "previous_profile"
+
+FIXED_ACTIONS: tuple[tuple[str, str], ...] = (
+    (ACTION_VOLUME_UP, "Volume up"),
+    (ACTION_VOLUME_DOWN, "Volume down"),
+    (ACTION_VOLUME_MUTE, "Toggle mute"),
+    (ACTION_NEXT_PROFILE, "Next profile"),
+    (ACTION_PREVIOUS_PROFILE, "Previous profile"),
+)
 
 # How often the daemon checks whether the current profile went idle.
 PROFILE_CHECK_SECONDS = 10
@@ -307,7 +324,7 @@ class KWinManager:
 
 
 class ShortcutActions:
-    """One KGlobalAccel action per profile.
+    """The KGlobalAccel actions of the daemon: the fixed ones and one per profile.
 
     Plasma reads the component over D-Bus, so the actions appear in System
     Settings while the daemon runs and no desktop file has to be regenerated.
@@ -328,7 +345,7 @@ class ShortcutActions:
         return dbus.Interface(self.bus.get_object(KGA_SERVICE, KGA_PATH), KGA_IFACE)
 
     def sync(self, profiles: Sequence[Profile]) -> None:
-        """Register an action per profile and drop the actions that are gone.
+        """Register the actions of the component and drop the ones that are gone.
 
         Registering is two calls per action: ``doRegister`` creates the action
         (and, on the first call, the component), then ``setShortcutKeys`` with
@@ -336,12 +353,8 @@ class ShortcutActions:
         second call is what turns a key in ``kglobalshortcutsrc`` into a key that
         fires; without it the binding is visible everywhere and dead.
         """
-        wanted = {action_name(profile.id): profile.display_name for profile in profiles}
-        if not wanted and not self.component_path:
-            # Nothing to register and no component from an earlier run: asking
-            # for the component now would only fail.
-            self.actions = ()
-            return
+        wanted = dict(FIXED_ACTIONS)
+        wanted.update({action_name(profile.id): profile.display_name for profile in profiles})
         try:
             iface = self._interface()
             for action, friendly in wanted.items():
@@ -363,7 +376,7 @@ class ShortcutActions:
                     log.debug("cannot unregister %s: %s", action, exc)
             path = str(iface.getComponent(KGA_COMPONENT))
         except dbus.DBusException as exc:
-            log.warning("cannot register the profile shortcuts: %s", exc)
+            log.warning("cannot register the shortcut actions: %s", exc)
             return
         self.actions = tuple(wanted)
         self.component_path = path
@@ -444,7 +457,19 @@ class Daemon(dbus.service.Object):
         self.shortcuts.sync(self.profiles)
 
     def on_shortcut(self, action: str) -> None:
-        """A profile key was pressed."""
+        """A key of the Appvol component was pressed."""
+        if action == ACTION_VOLUME_UP:
+            self._adjust(UP, 0.0)
+            return
+        if action == ACTION_VOLUME_DOWN:
+            self._adjust(DOWN, 0.0)
+            return
+        if action == ACTION_VOLUME_MUTE:
+            self._toggle_mute()
+            return
+        if action in (ACTION_NEXT_PROFILE, ACTION_PREVIOUS_PROFILE):
+            self._cycle_profile(-1 if action == ACTION_PREVIOUS_PROFILE else 1)
+            return
         profile_id = profile_from_action(action)
         if not profile_id or find_profile(self.profiles, profile_id) is None:
             log.debug("ignoring the unknown shortcut %s", action)
@@ -485,6 +510,23 @@ class Daemon(dbus.service.Object):
         self.state.selection.toggle(self._switch_target(profile_id).id, time.monotonic())
         log.info("profile: %s", self.state.selection.current)
         return self._feedback(self.current_profile(), osd)
+
+    def _cycle_profile(self, step: int) -> None:
+        """Switch to the next or the previous profile, with the OSD.
+
+        The order is the one the window shows: the built-in Active profile first,
+        then the profiles of ``profiles.toml``.  Unlike a profile key this is a
+        plain switch, so a second press goes on instead of coming back.
+        """
+        order = [ACTIVE_ID, *(profile.id for profile in self.profiles)]
+        try:
+            index = order.index(self.state.selection.current)
+        except ValueError:
+            index = 0
+        target = order[(index + step) % len(order)]
+        self.state.selection.select(target, time.monotonic())
+        log.info("profile: %s", self.state.selection.current)
+        self._feedback(self.current_profile(), osd=True)
 
     def _switch_target(self, profile_id: str) -> Profile:
         """The profile a switch refers to; an empty id means the built-in one."""

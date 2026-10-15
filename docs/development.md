@@ -15,11 +15,11 @@ appvol/daemon.py    appvold: D-Bus service, pulsectl, KWin script loader, shortc
 appvol/cli.py       appvol
 appvol/gui/         appvol-gui: D-Bus client, QML bridge, window and tray (optional)
 kwin/appvol.js      KWin script, pushes the focus
-desktop/            templates of the two entries, the icon, the shortcut helper
+desktop/            template of the window entry and the icon
 systemd/            template of the user unit
 packaging/          PKGBUILD (split into appvol and appvol-gui) and pacman scriptlets
 install.sh          per-user install into ~/.local, no root
-bin/                launchers: appvol, appvold, appvol-gui, appvol-shortcuts, appvol-release
+bin/                launchers: appvol, appvold, appvol-gui, appvol-release
 tests/
 docs/
 ```
@@ -47,9 +47,8 @@ python3 -m unittest discover -s tests -t .
 | `tests/test_config.py` | TOML parsing, bad values, clamping |
 | `tests/test_cli.py` | argument parsing and the readable answers |
 | `tests/test_gui.py` | the D-Bus client, the key rendering, the QML bridge (skipped without PySide6) |
-| `tests/test_shortcuts.py` | the desktop entry against the client command line |
 | `tests/test_osd.py` | the OSD wrapper across a name owner change |
-| `tests/test_daemon.py` | KWin script lookup in a checkout and in an installed layout |
+| `tests/test_daemon.py` | KWin script lookup, the shortcut actions, their dispatch, the OSD caption |
 
 No test needs a session: the ones that touch the bus use fakes, and the GUI tests
 skip themselves when PySide6 is not installed, so the suite runs on a machine
@@ -57,7 +56,8 @@ without Qt.
 
 ## Profiles in a live session
 
-The daemon registers one KGlobalAccel action per profile, and an action can be
+The daemon registers the KGlobalAccel actions of the component `Appvol` — the five
+fixed ones and one per profile — and an action can be
 pressed over D-Bus, which tests the whole path from the shortcut server to the
 OSD without touching the keyboard:
 

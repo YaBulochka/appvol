@@ -13,7 +13,10 @@
 #   <prefix>/share/appvol/                 the package, the KWin script, the templates
 #   <prefix>/bin/appvol, appvold, ...      symlinks to the launchers there
 #   ~/.config/systemd/user/appvold.service the user unit (ExecStart is absolute)
-#   ~/.local/share/applications/org.appvol.desktop   the KDE shortcut entry
+#
+# The global shortcuts (the volume keys, the profile keys) belong to the running
+# daemon, so they appear in System Settings while it runs and no desktop file is
+# installed for them.
 #
 # With PySide6 installed it also adds the window and the tray icon:
 #
@@ -37,7 +40,7 @@ gui_entry="$data_home/applications/org.appvol.gui.desktop"
 gui_icon="$data_home/icons/hicolor/scalable/apps/appvol.svg"
 
 usage() {
-    sed -n '2,22p' "$self" | sed 's/^# \{0,1\}//'
+    sed -n '2,25p' "$self" | sed 's/^# \{0,1\}//'
     echo
     echo "Options: --service  --prefix DIR  --no-gui  --uninstall  --help"
 }
@@ -112,18 +115,15 @@ uninstall() {
         rm -f "$unit"
         command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload || true
     fi
-    if [ -x "$install_dir/bin/appvol-shortcuts" ]; then
-        "$install_dir/bin/appvol-shortcuts" --remove
-    fi
     local name
-    for name in appvol appvold appvol-shortcuts appvol-gui; do
+    for name in appvol appvold appvol-gui; do
         rm -f "$prefix/bin/$name"
     done
     rm -f "$gui_entry" "$gui_icon"
     rm -rf "$install_dir"
     # Only succeeds when nothing else lives there.
     rmdir "$prefix/bin" "$prefix/share" 2>/dev/null || true
-    echo "appvol: removed from $prefix, together with the unit and the KDE entry"
+    echo "appvol: removed from $prefix, together with the unit and the shortcut entry"
     exit 0
 }
 
@@ -137,6 +137,9 @@ report_unit() {
         echo "        systemctl --user daemon-reload && systemctl --user enable --now appvold"
         echo "        or run $install_dir/bin/appvold in a terminal"
     fi
+    echo "appvol: bind the keys in System Settings -> Shortcuts, entry \"Appvol\":"
+    echo "        Volume up, Volume down, Toggle mute, Next profile, Previous profile,"
+    echo "        and one action per profile. The entry appears while the daemon runs."
 }
 
 if [ "$action" = uninstall ]; then
@@ -167,7 +170,7 @@ chmod 755 "$install_dir/bin"/*
 echo "appvol: files installed in $install_dir"
 
 install -d "$prefix/bin"
-for name in appvol appvold appvol-shortcuts; do
+for name in appvol appvold; do
     ln -sfn "$install_dir/bin/$name" "$prefix/bin/$name"
 done
 if want_gui; then
@@ -178,8 +181,6 @@ echo "appvol: launchers linked into $prefix/bin"
 install -d "$(dirname "$unit")"
 sed "s|@APPVOLD@|$install_dir/bin/appvold|" "$root/systemd/appvold.service.in" >"$unit"
 echo "appvol: systemd user unit installed as $unit"
-
-"$install_dir/bin/appvol-shortcuts"
 
 if want_gui; then
     install -d "$(dirname "$gui_entry")" "$(dirname "$gui_icon")"

@@ -154,13 +154,16 @@ include = ["spotify"]
 step = 2
 ```
 
-One action per profile is registered in KGlobalAccel at run time, in the component
-`appvol` (friendly name "appvol profiles"), which keeps the keys the user assigns
-in System Settings in `kglobalshortcutsrc` across daemon restarts. Every
+The actions of the daemon are registered in KGlobalAccel at run time, in the
+component `appvol` (friendly name "Appvol", the entry System Settings shows): five
+fixed actions (volume up, volume down, toggle mute, next profile, previous profile)
+and one per profile. The keys the user assigns live in `kglobalshortcutsrc` under
+the component name and survive daemon restarts; `Next` and `Previous` walk the
+built-in Active profile and the profiles in the order the window lists them. Every
 registration then marks the action *present*, because the shortcut server only
 grabs the keys of a present action; [plasma-notes.md](plasma-notes.md) records the
-mechanism. The three volume actions stay where they were, in a service component
-built from `desktop/org.appvol.desktop.in`.
+mechanism. Nothing else installs a shortcut entry: the daemon answers every key
+itself, so a press costs no process start.
 
 ## GUI
 

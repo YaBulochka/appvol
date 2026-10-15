@@ -68,6 +68,10 @@ one, and the code follows what the system actually does.
 
 ## Hotkeys
 
+appvol registers its shortcuts at run time and installs no desktop file. The
+desktop-file route was tried first and is kept here because it explains what a
+component is; the notes below also record why it was dropped.
+
 * A desktop file with `Actions=` and a non-empty `X-KDE-Shortcuts` (in any group,
   service or action) becomes a component in `kglobalacceld`.
   `KServiceActionComponent::loadSettings` registers one shortcut per action and
@@ -79,25 +83,30 @@ one, and the code follows what the system actually does.
   key bound": an empty value does not work, because the daemon looks for a
   non-empty one. A non-empty value is also what makes a running `kglobalacceld`
   notice the file at all.
-* Changed desktop files are not re-read while the component already exists. Force
-  a reload with `bin/appvol-shortcuts --remove`, `kbuildsycoca6 --noincremental`,
-  then reinstall the entry.
+* A service component shows up as a second entry. appvol 0.1.0 kept its three
+  volume actions in `org.appvol.desktop` and its profile actions in the runtime
+  component of the daemon, so System Settings listed "appvol" and "appvol
+  profiles" side by side. Merging them means dropping the file and answering the
+  volume keys in the daemon, which is what 0.2.0 does; the keys the user had
+  assigned to the service component have to be assigned again.
+* Changed desktop files are not re-read while the component already exists, so a
+  hand edit needs `kbuildsycoca6 --noincremental` (or a re-login) to be noticed.
 * The flag `X-KDE-GlobalAccel-CommandShortcut=true`, which the KCM writes for
   Add → Command or Script, makes the KCM label the actions with the raw `Exec`
   string and file the component under "Commands". Without the flag the actions
   keep their `Name`s and a file from `~/.local/share/applications` is shown as an
-  application. The appvol entry takes the second route.
-* The shortcut server runs `Exec` with the environment of the session, which has
-  no `~/.local/bin` in `PATH`. A relative command fails with
-  `Could not find the program "appvol"`, which is why every `Exec` line in the
-  entry holds an absolute path.
+  application.
+* A shortcut that runs a command inherits the environment of the session, which
+  has no `~/.local/bin` in `PATH`. A relative command fails with
+  `Could not find the program "appvol"`, which is why the old `Exec` lines held
+  absolute paths.
 * A component can also be created at run time, with no desktop file at all.
   `org.kde.KGlobalAccel.doRegister([component, action, componentName, actionName])`
   creates the action and, on the first call, the component; `getComponent`
   returns its object path (`/component/appvol`; non-alphanumeric characters
   become `_`) and `Component.invokeShortcut(action)` emits the press. appvol
-  registers one action per profile that way, so a new profile needs no
-  `kbuildsycoca6` run and the profile list follows the daemon.
+  registers the five fixed actions and one action per profile that way, so a new
+  profile needs no `kbuildsycoca6` run and the list follows the daemon.
 * Keys go in through `setShortcutKeys(actionId, keys, flags)`, where `keys` is
   `a(ai)`: one structure per shortcut, holding the ints of one Qt key sequence
   (the first is `key | modifiers`, the three others zero, so `Ctrl+Alt+Shift+F9`
@@ -114,8 +123,8 @@ one, and the code follows what the system actually does.
   client library passes it itself): an application claims its actions with
   `setShortcutKeys(actionId, keys, SetPresent)`. With autoloading, which is the
   default (no `NoAutoloading`), that call keeps the keys from the config and only
-  marks them present, so it is safe to repeat. appvol calls it for every profile
-  action right after `doRegister`, and again whenever the shortcut server
+  marks them present, so it is safe to repeat. appvol calls it for every action
+  right after `doRegister`, and again whenever the shortcut server
   reappears on the bus.
 * A key assigned to a component lands in `kglobalshortcutsrc` under a section
   named after it (`[appvol]`, exactly like `[kmix]`) and is restored when the
@@ -131,8 +140,8 @@ one, and the code follows what the system actually does.
   tapped one are byte-identical, which is why appvol switches the profile on
   press and switches back on the next press.
 * There is no deep link into the shortcut list. `systemsettings kcm_keys` opens
-  it, and the entries are found by name: "appvol" holds the three volume actions
-  from the desktop file, "appvol profiles" holds one action per profile.
+  it, and the entries are found by name: "Appvol" holds the five fixed actions
+  and one action per profile.
 * The keys can be read back with `shortcutKeys(actionId)` against
   `/kglobalaccel`, which answers `a(ai)` in the same shape `setShortcutKeys`
   takes: one structure per shortcut, first int `key | modifiers`, three zeros. An

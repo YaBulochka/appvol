@@ -26,7 +26,7 @@ IFACE = "org.kde.KGlobalAccel"
 
 # Must equal KGA_COMPONENT and KGA_COMPONENT_FRIENDLY in appvol/daemon.py.
 COMPONENT = "appvol"
-COMPONENT_FRIENDLY = "appvol profiles"
+COMPONENT_FRIENDLY = "Appvol"
 
 
 def action_id(action: str, name: str) -> list[str]:

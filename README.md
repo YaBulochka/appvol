@@ -67,24 +67,17 @@ bin/appvol up              # in another terminal
 
 ## Hotkeys
 
-appvol appears in System Settings → Shortcuts on its own, like an application or
-a system service. The pacman package puts its desktop entry into
-`/usr/share/applications`; from the checkout or after `install.sh` use:
+appvol appears in System Settings → Shortcuts while the daemon runs, under the
+entry **Appvol**, next to the other applications. Nothing has to be installed or
+regenerated for it: the daemon registers the actions itself.
 
-```sh
-bin/appvol-shortcuts            # install or refresh the entry
-bin/appvol-shortcuts --remove   # remove it
-```
-
-Search for "appvol", then bind **Volume up**, **Volume down** and **Toggle
-mute**. No keys are bound by default. The `Exec` lines hold absolute paths on
-purpose: the shortcut server has no `~/.local/bin` in `PATH`, so an entry added
-by hand as `appvol up` (Add → Command or Script) fails with
-`Could not find the program "appvol"`. Remove such entries if you made them.
+Search for "appvol", then bind **Volume up**, **Volume down**, **Toggle mute**,
+**Next profile** and **Previous profile**. No keys are bound by default, and
+keyboard shortcuts stay in System Settings; appvol never writes one.
 
 ## Profiles
 
-A profile is a named target for the same three keys. The **Active window** profile
+A profile is a named target for the same volume keys. The **Active window** profile
 is built in and needs no configuration; the profiles you create select
 applications:
 
@@ -103,12 +96,15 @@ applications, which is how an inversion profile is built. `--step`,
 `--max-volume`, `--icon` and `--osd-name` override the config for that profile.
 The profiles live in `~/.config/appvol/profiles.toml`, written by the daemon.
 
-Every profile registers its own action in KGlobalAccel, so it shows up in System
-Settings → Shortcuts under **appvol profiles** while the daemon runs. Bind a key
-per profile there, next to the three volume keys under **appvol**. While a profile
-is current, the volume keys follow it; the OSD captions the profile name, while a
-volume key on the focused window shows that window's icon alone. Five minutes
-without a press on the profile return the keys to the Active profile.
+The daemon registers one action per profile in KGlobalAccel, so every profile
+shows up in System Settings → Shortcuts under **Appvol** while the daemon runs,
+next to the five fixed actions. Bind a key per profile there. While a profile is
+current, the volume keys follow it; the OSD captions the profile name, while a
+volume key on the focused window shows that window's icon alone. **Next profile**
+and **Previous profile** walk through the built-in Active profile and the profiles
+in the order the window lists them, so a key press away from the last one lands on
+Active again. Five minutes without a press on the profile return the keys to the
+Active profile.
 
 ## Window and tray icon
 
@@ -118,8 +114,8 @@ the volume keys, and a tray icon with the profiles, the three volume actions and
 **Quit**. The sliders and the mute switches act on the live streams, the step can
 be changed in the row itself, **New Profile** and **Edit** open a form whose
 application list is what is playing right now, and **Bind Keys…** opens System
-Settings → Shortcuts, where the profiles are listed under **appvol profiles**. The
-window shows the binding and never sets one.
+Settings → Shortcuts, where the profiles are listed under **Appvol**. The window
+shows the binding and never sets one.
 
 It needs PySide6, Kirigami, `qqc2-desktop-style` and `breeze-icons`; the daemon
 and the CLI run without any of them. [docs/gui.md](docs/gui.md) has the details.

@@ -11,5 +11,6 @@ StartupWMClass=appvol
 Categories=AudioVideo;Audio;
 Keywords=volume;audio;pipewire;profile;stream;
 
-# No X-KDE-Shortcuts here: this file launches the window, while the volume and
-# profile keys of the other file (org.appvol.desktop) stay where they are.
+# No X-KDE-Shortcuts here: this file launches the window.  The volume keys, the
+# profile keys and the rest belong to the running daemon, which registers them as
+# the KGlobalAccel component "Appvol".
