@@ -19,9 +19,8 @@ license=('MIT')
 source=("$pkgbase-$pkgver.tar.gz")
 sha256sums=('SKIP')
 
-# makepkg unpacks the archive into $srcdir but stays in its own directory.
-_sourcedir="$srcdir/$pkgbase-$pkgver"
-
+# $srcdir is only set once makepkg starts a package function, so the unpacked
+# tree can not be named at the top of the file.
 _site() {
     python -c 'import sys; print("lib/python{}.{}/site-packages".format(*sys.version_info[:2]))'
 }
@@ -38,7 +37,7 @@ package_appvol() {
     )
     install=appvol.install
 
-    cd "$_sourcedir"
+    cd "$srcdir/$pkgbase-$pkgver"
 
     local site
     site="$(_site)"
@@ -75,7 +74,7 @@ package_appvol-gui() {
     depends=('appvol' 'pyside6' 'kirigami' 'qqc2-desktop-style' 'breeze-icons')
     optdepends=('plasma-desktop: the desktop whose shortcut dialog the window opens')
 
-    cd "$_sourcedir"
+    cd "$srcdir/$pkgbase-$pkgver"
 
     local site
     site="$(_site)"
