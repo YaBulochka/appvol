@@ -100,8 +100,9 @@ if [ "$with_package" = yes ]; then
         exit 1
     fi
     ( cd packaging && makepkg --force --cleanbuild --clean --noconfirm )
-    # The PKGBUILD is a split package: appvol and appvol-gui.
-    for file in packaging/appvol-*-"$version"-*.pkg.tar.*; do
+    # The PKGBUILD is a split package: appvol and appvol-gui.  The pattern allows
+    # a suffix between the name and the version, as in appvol-gui-<version>-...
+    for file in packaging/appvol-*"$version"*.pkg.tar.*; do
         if [ ! -f "$file" ]; then
             echo "appvol-release: makepkg produced no package to copy" >&2
             exit 1
