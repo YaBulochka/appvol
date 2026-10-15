@@ -1,6 +1,6 @@
 [Unit]
 Description=appvol daemon (volume of the audio streams of the focused window)
-Documentation=https://github.com/example/appvol
+Documentation=https://github.com/YaBulochka/appvol
 PartOf=graphical-session.target
 After=graphical-session.target
 
