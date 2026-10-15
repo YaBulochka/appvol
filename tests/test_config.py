@@ -27,6 +27,17 @@ class ConfigTests(unittest.TestCase):
     def test_invalid_osd_falls_back(self) -> None:
         self.assertTrue(parse('osd = "yes"').osd)
 
+    def test_profile_idle_timeout(self) -> None:
+        self.assertEqual(Config().profile_idle_timeout, 300.0)
+        self.assertEqual(parse("profile_idle_timeout = 60").profile_idle_timeout, 60.0)
+
+    def test_a_zero_timeout_disables_the_return_to_active(self) -> None:
+        self.assertEqual(parse("profile_idle_timeout = 0").profile_idle_timeout, 0.0)
+        self.assertEqual(parse("profile_idle_timeout = -5").profile_idle_timeout, 0.0)
+
+    def test_invalid_profile_idle_timeout_falls_back(self) -> None:
+        self.assertEqual(parse('profile_idle_timeout = "soon"').profile_idle_timeout, 300.0)
+
     def test_broken_toml_falls_back(self) -> None:
         self.assertEqual(parse("step = "), Config())
 

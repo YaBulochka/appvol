@@ -1,11 +1,14 @@
 # Architecture
 
-Three parts, one goal: change the volume of the streams of the focused window.
+Three parts, one goal: change the volume of the streams of one target, which is
+the focused window by default and a named profile otherwise.
 
 ```
 KWin script --SetFocus(pid, resourceClass, desktopFileName, caption)--> appvold
+                                                                            ^
+appvol up --AdjustTarget(profile, "up", 0)----------------------------------+
                                                                             |
-appvol up --Adjust("up", 5)-----------------------------------------------> |
+kglobalacceld --globalShortcutPressed(profile_spotify)----------------------+
                                                                             v
                                                      pulsectl -> sink inputs -> OSD
 ```
@@ -16,9 +19,9 @@ appvol up --Adjust("up", 5)-----------------------------------------------> |
 that talks to PipeWire and KWin. It holds a `pulsectl` connection to
 pipewire-pulse, registers `org.appvol.Daemon` on the session bus, caches the last
 focus the KWin script reported, loads `kwin/appvol.js` through
-`org.kde.kwin.Scripting`, and shows the OSD. A second instance refuses to start:
-the bus name is taken with `do_not_queue`, so the error is immediate instead of a
-silent wait.
+`org.kde.kwin.Scripting`, owns the profiles and shows the OSD. A second instance
+refuses to start: the bus name is taken with `do_not_queue`, so the error is
+immediate instead of a silent wait.
 
 **The KWin script** ([`kwin/appvol.js`](../kwin/appvol.js)) pushes the focused
 window on load exactly as on every `workspace.windowActivated`. It sends `pid`,
@@ -39,13 +42,26 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | Method | Signature | Used by | Answer |
 | --- | --- | --- | --- |
 | `SetFocus(pid, resourceClass, desktopFileName, caption)` | `isss -> i` | KWin script | `0`, the script ignores the answer |
-| `Adjust(direction, step)` | `sd -> s` | client | JSON result, `direction` is `up` or `down` |
-| `ToggleMute()` | ` -> s` | client | JSON result |
-| `List()` | ` -> s` | client | JSON: config, focus, match, streams, OSD appearance |
+| `Adjust(direction, step)` | `sd -> s` | client | JSON result for the current profile |
+| `AdjustTarget(profile, direction, step)` | `ssd -> s` | client | JSON result for one profile, without switching |
+| `ToggleMute()` | ` -> s` | client | JSON result for the current profile |
+| `ToggleMuteTarget(profile)` | `s -> s` | client | JSON result for one profile |
+| `ToggleProfile(profile)` | `s -> s` | client | switch the profile, answer describes the OSD |
+| `Profiles()` | ` -> s` | client | JSON: the profiles and the current one |
+| `AddProfile(id, name, include, exclude, step, max_volume, icon, osd_name)` | `ssasasddss -> s` | client | JSON: the profiles after the change |
+| `RemoveProfile(id)` | `s -> s` | client | JSON: the profiles after the change |
+| `Reload()` | ` -> s` | client | read `profiles.toml` again |
+| `List()` | ` -> s` | client | JSON: config, profile, focus, match, streams, OSD appearance |
 
-Errors: `org.appvol.Error.InvalidArgument` for a bad direction or a non-positive
-step. When the daemon is not running, the client prints `appvold is not running
-(start it with: systemctl --user start appvold)` and exits with status 1.
+An empty profile argument means the current profile, except in `ToggleProfile`
+where it means the built-in one. Errors: `org.appvol.Error.InvalidArgument` for a
+bad direction, a negative step, an unknown profile or an unknown action; the
+client prints the message and exits with status 2. When the daemon is not running,
+the client prints `appvold is not running (start it with: systemctl --user start
+appvold)` and exits with status 1.
+
+A step of zero means "the step of the profile, else the one from the config", so
+a client never has to know which profile is current.
 
 ## Matching
 
@@ -73,12 +89,61 @@ or desktop window (`plasmashell`, `org.kde.plasmashell`, `org.kde.kdesktop`,
 `org.kde.kwin.desktop`) or when there is no pid. With nothing matched, no volume
 changes and the command still exits with status 0.
 
+## Profiles
+
+[`appvol/profiles.py`](../appvol/profiles.py) holds the model, the file format
+and a pure matcher, so all of it is unit tested without a session.
+
+A profile is a named target with one of two modes. `focus` is the built-in
+**Active window** profile (`id = "active"`), which is what the keys did before
+profiles existed; it cannot be edited or removed. `streams` selects sink inputs
+by application: `include` lists identifiers compared the same way as in the name
+step above, and an empty list means every application stream. `exclude` removes
+applications from the result, which is how an inversion profile ("everything but
+the game") is spelled. An empty `include` is the common case, so the matcher drops
+the streams of the shell there: `plasmashell`, `kwin`, `kded` and the event and
+notification sounds, matched by the same name variants as a window. An explicit
+`include` still reaches them, so nothing is unreachable.
+
+`step`, `max_volume`, `icon` and `osd_name` are per profile; an unset value falls
+back to `config.toml`. `osd_name` is `auto` (the name for stream profiles, only
+the icon for the Active one), `always` or `never`.
+
+Switching is a toggle: a profile key switches to that profile, the same key
+switches back to Active, another profile key switches over. The three volume keys
+are global and always follow the current profile. Every key press on the current
+profile counts as using it, and after `profile_idle_timeout` seconds without one
+the daemon returns to Active and logs the return.
+
+The profiles live in `~/.config/appvol/profiles.toml`, which the daemon reads at
+start and writes on every change, replacing the file in one step. The CLI and a
+future GUI go through the D-Bus API, so there is a single writer; `Reload()` exists
+for hand edits.
+
+```toml
+[[profile]]
+id = "spotify"
+name = "Spotify"
+mode = "streams"
+include = ["spotify"]
+step = 2
+```
+
+One action per profile is registered in KGlobalAccel at run time, in the component
+`appvol` (friendly name "appvol profiles"), which keeps the keys the user assigns
+in System Settings in `kglobalshortcutsrc` across daemon restarts. The three volume
+actions stay where they were, in a service component built from
+`desktop/org.appvol.desktop.in`. [plasma-notes.md](plasma-notes.md) records what
+was verified about both mechanisms.
+
 ## Volume
 
 [`appvol/volume.py`](../appvol/volume.py) is pure arithmetic: the step applies to
 every matched stream, channel balance is preserved, and the result is clamped to
-`0..max_volume`. `mute` toggles the mute flag of all matched streams. The percent
-shown in the OSD is the maximum across the streams that changed.
+`0..max_volume`, which is the profile's value or the global one. `mute` is
+aggregate: when any matched stream is audible all of them are muted, and when the
+whole set is muted it is unmuted again. The percent shown in the OSD is the
+maximum across the matched streams.
 
 ## Lifecycle
 
@@ -93,6 +158,10 @@ shown in the OSD is the maximum across the streams that changed.
   back, `stream-restore` restores them within a couple of seconds.
 * **Focus is pushed, not polled.** No timer reads KWin: the daemon only knows
   what the script last sent.
+* **A profile goes idle.** A timer wakes up every 10 seconds and returns the keys
+  to Active after `profile_idle_timeout` seconds without a press on the current
+  profile, so the return happens between that timeout and ten seconds later. The
+  default is 300; zero disables it.
 
 ## Configuration
 
@@ -100,6 +169,7 @@ shown in the OSD is the maximum across the streams that changed.
 (`XDG_CONFIG_HOME` is honoured). A missing file means defaults; a malformed value
 means the default for that key alone, with a warning in the log. `step` and
 `max_volume` are percentages, `max_volume` is capped at 150, `osd` toggles the
-OSD, and `kwin_script` overrides the script location. The command line wins over
-the file (`appvol up --step 2`, `appvold --config FILE`, `appvold --kwin-script
-FILE`).
+OSD, `profile_idle_timeout` is the number of seconds before a profile returns to
+Active, and `kwin_script` overrides the script location. The command line wins over
+the file (`appvol up --step 2`, `appvold --config FILE`, `appvold --profiles FILE`,
+`appvold --kwin-script FILE`).

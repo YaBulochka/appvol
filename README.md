@@ -3,13 +3,14 @@
 Volume control for the audio streams of the focused window, on KDE Plasma 6
 (Wayland, PipeWire). Press a hotkey, and appvol changes the volume of every
 audio stream that belongs to the application whose window is focused, showing
-the stock KDE OSD.
+the stock KDE OSD. Profiles extend that to named targets: one key for the
+application of your choice, one for everything except it.
 
 ```sh
 appvol up      # +5% for the focused application
 appvol down    # -5%
 appvol mute    # toggle mute
-appvol list    # streams, cached focus, and which match step fired
+appvol list    # streams, cached focus, profiles, and which match step fired
 ```
 
 A user daemon on the session bus, a KWin script that reports the focused window,
@@ -70,14 +71,42 @@ purpose: the shortcut server has no `~/.local/bin` in `PATH`, so an entry added
 by hand as `appvol up` (Add → Command or Script) fails with
 `Could not find the program "appvol"`. Remove such entries if you made them.
 
+## Profiles
+
+A profile is a named target for the same three keys. The **Active window** profile
+is built in and needs no configuration; the profiles you create select
+applications:
+
+```sh
+appvol profile add spotify --include spotify --name Spotify
+appvol profile add desktop --exclude spotify --name "Everything but Spotify"
+appvol profile toggle spotify   # or press its key; press again to go back
+appvol profile list             # what exists, and which profile is current
+appvol up --profile spotify     # one call, without switching to it
+```
+
+`--include` takes application identifiers; the reverse-DNS name also matches by
+its last part, so `firefox` finds `org.mozilla.firefox`. An empty `--include`
+means every application stream with the shell left out, and `--exclude` removes
+applications, which is how an inversion profile is built. `--step`,
+`--max-volume`, `--icon` and `--osd-name` override the config for that profile.
+The profiles live in `~/.config/appvol/profiles.toml`, written by the daemon.
+
+Every profile registers its own action in KGlobalAccel, so it shows up in System
+Settings → Shortcuts under **appvol profiles** while the daemon runs. Bind a key
+per profile there, next to the three volume keys under **appvol**. While a profile
+is current, the volume keys follow it; the OSD captions the profile name. Five
+minutes without a press on the profile return the keys to the Active profile.
+
 ## Config
 
 `~/.config/appvol/config.toml`, every key optional:
 
 ```toml
-step = 5          # relative step in percent
-max_volume = 100  # upper limit, up to 150
-osd = true        # show the KDE OSD
+step = 5                     # relative step in percent
+max_volume = 100             # upper limit, up to 150
+osd = true                   # show the KDE OSD
+profile_idle_timeout = 300   # seconds before a profile returns to Active, 0 disables
 # kwin_script = "/path/to/appvol.js"   # override the bundled KWin script
 ```
 
@@ -85,6 +114,7 @@ osd = true        # show the KDE OSD
 
 ```sh
 appvol list                        # focus, streams, why nothing matched
+appvol profile list                # profiles and the current one
 appvold -v                         # verbose daemon log
 journalctl --user -u appvold -f    # when it runs under systemd
 ```
@@ -92,6 +122,11 @@ journalctl --user -u appvold -f    # when it runs under systemd
 * Nothing changes: `appvol list` shows the cached focus. Windows on the panel or
   the desktop are ignored, and so is `plasmashell`. An application that is not
   playing anything has no stream to change yet.
+* A profile key does nothing: the daemon is not running, or the action of that
+  profile has no key yet. `appvol profile add` registers the action, and it stays
+  on the list in System Settings; assign the key there.
+* A profile matches nothing: `appvol list` with the profile current shows the
+  reason, and `appvol up --profile NAME` answers without switching.
 * No OSD: check `osd = true` and a normal Plasma session, where `plasmashell`
   owns `org.freedesktop.Notifications`. The daemon logs `cannot show volume OSD`
   when the call fails.

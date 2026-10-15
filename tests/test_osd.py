@@ -67,6 +67,23 @@ class OsdTest(unittest.TestCase):
         self.assertEqual([int(value) for value in args], [42])
         self.assertEqual(kwargs, {"dbus_interface": OSD_IFACE, "signature": "i"})
 
+    def test_a_name_is_sent_as_the_caption(self) -> None:
+        factory = Factory()
+        Osd(connect=factory).volume_changed(42, icon="spotify", name="Spotify")
+        method, args, kwargs = factory.calls[0]
+        self.assertEqual(method, "mediaPlayerVolumeChanged")
+        self.assertEqual([int(value) for value in args[:1]], [42])
+        self.assertEqual(list(args[1:]), ["Spotify", "spotify"])
+        self.assertEqual(kwargs, {"dbus_interface": OSD_IFACE, "signature": "iss"})
+
+    def test_a_name_without_an_icon_still_uses_the_player_method(self) -> None:
+        factory = Factory()
+        Osd(connect=factory).volume_changed(0, name="Spotify")
+        method, args, _ = factory.calls[0]
+        self.assertEqual(method, "mediaPlayerVolumeChanged")
+        self.assertEqual(int(args[0]), 0)
+        self.assertEqual(list(args[1:]), ["Spotify", ""])
+
     def test_text_uses_show_text(self) -> None:
         factory = Factory()
         Osd(connect=factory).text("java", "Muted")

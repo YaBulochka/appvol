@@ -25,8 +25,10 @@ one, and the code follows what the system actually does.
   `mediaPlayerVolumeChanged(percent, name, icon)` can: in `shell/osd.cpp` of
   plasma-workspace it calls `showProgress(icon, percent, 100, name)`, and
   `showText(icon, "%1 Muted")` at zero percent. appvol uses it whenever the icon
-  is known and sends an empty name, which leaves only the icon on screen. See
-  [osd.md](osd.md) for the icon sources.
+  is known, with an empty name for the Active window profile (only the icon on
+  screen) and with the profile name otherwise, which also gives a "Spotify
+  Muted" caption instead of a plain "Muted". See [osd.md](osd.md) for the icon
+  sources.
 * An OSD proxy must not be cached as is. `dbus-python` resolves a well-known name
   to the unique name of the current owner and keeps sending there, so a cached
   proxy survives into the next `plasmashell` and every call fails with
@@ -89,6 +91,34 @@ one, and the code follows what the system actually does.
   no `~/.local/bin` in `PATH`. A relative command fails with
   `Could not find the program "appvol"`, which is why every `Exec` line in the
   entry holds an absolute path.
+* A component can also be created at run time, with no desktop file at all.
+  `org.kde.KGlobalAccel.doRegister([component, action, componentName, actionName])`
+  creates the action and, on the first call, the component; `getComponent`
+  returns its object path (`/component/appvol`; non-alphanumeric characters
+  become `_`) and `Component.invokeShortcut(action)` emits the press. appvol
+  registers one action per profile that way, so a new profile needs no
+  `kbuildsycoca6` run and the profile list follows the daemon.
+* Keys go in through `setShortcutKeys(actionId, keys, flags)`, where `keys` is
+  `a(ai)`: one structure per shortcut, holding the ints of one Qt key sequence
+  (the first is `key | modifiers`, the three others zero, so `Ctrl+Alt+Shift+F9`
+  is `0x0F000038` and `Meta+Alt+S` reads back as `402653267`). `dbus-python`
+  wants that structure spelled out on write and hides it on read.
+* A key assigned to a component lands in `kglobalshortcutsrc` under a section
+  named after it (`[appvol]`, exactly like `[kmix]`) and is restored when the
+  component registers again, so the bindings survive a restart of the daemon.
+  `unregister(component, action)` removes the action, its key and, when it was
+  the last one, the whole section.
+* `globalShortcutPressed/Repeated/Released(componentUnique, actionUnique,
+  timestamp)` arrive on the component object, with `timestamp` always 0. A
+  service component ignores everything but `Pressed`
+  (`KServiceActionComponent::emitGlobalShortcutEvent`), and the registry keeps a
+  single "last shortcut": pressing another one emits `Released` for the previous
+  one, releasing a key emits it for the current one. A held profile key and a
+  tapped one are byte-identical, which is why appvol switches the profile on
+  press and switches back on the next press.
+* There is no deep link into the shortcut list. `systemsettings kcm_keys` opens
+  it, and the entries are found by name: "appvol" holds the three volume actions
+  from the desktop file, "appvol profiles" holds one action per profile.
 
 ## Audio backend
 

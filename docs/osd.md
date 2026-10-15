@@ -17,10 +17,12 @@ the stock KDE OSD.
   `signature="i"`.
 * `showText(icon, text)` draws an icon with a caption, and is what `mute` uses.
 
-appvol prefers the first method whenever the icon is known. The `name` argument
-is sent empty: the icon alone looked better than an icon with a caption. The name
-is still computed, `appvol list` prints it for diagnostics, and a future GUI
-setting can show it. When no icon is known, the OSD falls back to
+appvol prefers the first method whenever the icon is known. For the Active window
+profile the `name` argument is sent empty, because the icon alone looked better
+than an icon with a caption; a stream profile sends its own name, so the OSD reads
+"Spotify" with the volume bar and "Spotify Muted" at zero percent. The name of the
+Active profile is still computed, `appvol list` prints it for diagnostics, and a
+future GUI setting can show it. When no icon is known, the OSD falls back to
 `volumeChanged(percent)` so the user still gets feedback:
 
 ```
@@ -29,7 +31,14 @@ osd:    icon='spotify' (app 'Spotify')
 ```
 
 `mute` shows the icon with the caption `Muted`, `unmute` shows the icon with the
-volume bar (or `Unmuted` when the volume is zero).
+volume bar (or `Unmuted` when the volume is zero). A profile that matches nothing
+answers `no stream` instead of staying silent, because a profile key press is an
+explicit action on a target the user chose.
+
+A profile has three icon sources, in this order: its own `icon` key, when the
+theme can render it; the matched stream, through the same chain as below; and the
+`.desktop` file of the first entry of `include`. When all three come up empty the
+generic volume icon is used, so the caption is never left without an icon.
 
 ## Where the icon comes from
 

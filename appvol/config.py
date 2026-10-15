@@ -17,6 +17,7 @@ log = logging.getLogger(__name__)
 DEFAULT_STEP = 5.0
 DEFAULT_MAX_VOLUME = 100.0
 HARD_MAX_VOLUME = 150.0
+DEFAULT_PROFILE_IDLE_TIMEOUT = 300.0
 
 
 def default_path() -> Path:
@@ -30,12 +31,15 @@ class Config:
     """Runtime configuration.
 
     ``step`` and ``max_volume`` are percentages, ``osd`` toggles the KDE OSD,
+    ``profile_idle_timeout`` is the number of seconds a profile may stay idle
+    before the keys return to the Active profile (0 disables the return), and
     ``kwin_script`` optionally overrides the bundled KWin script location.
     """
 
     step: float = DEFAULT_STEP
     max_volume: float = DEFAULT_MAX_VOLUME
     osd: bool = True
+    profile_idle_timeout: float = DEFAULT_PROFILE_IDLE_TIMEOUT
     kwin_script: str | None = None
 
     @property
@@ -90,11 +94,21 @@ def parse(text: str) -> Config:
         log.warning("config: kwin_script is not a string, ignoring it")
         script = None
 
+    timeout = _as_float(
+        data.get("profile_idle_timeout", config.profile_idle_timeout), config.profile_idle_timeout
+    )
+    if timeout < 0:
+        log.warning(
+            "config: profile_idle_timeout %s is negative, disabling the return to Active", timeout
+        )
+        timeout = 0.0
+
     return replace(
         config,
         step=step,
         max_volume=max_volume,
         osd=_as_bool(data.get("osd", config.osd), config.osd),
+        profile_idle_timeout=timeout,
         kwin_script=script,
     )
 

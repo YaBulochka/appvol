@@ -93,20 +93,21 @@ class Osd:
                     exc.get_dbus_name(),
                 )
 
-    def volume_changed(self, value: int, icon: str = "") -> None:
+    def volume_changed(self, value: int, icon: str = "", name: str = "") -> None:
         """Show the volume OSD for an application.
 
-        ``icon`` comes from :mod:`appvol.icon`.  The application name is
-        deliberately not sent: Plasma renders the caption from the second
-        argument and the OSD looks cleaner with just the icon.  Without an icon
-        the generic volume OSD is used, so the user still gets feedback.
+        ``icon`` comes from :mod:`appvol.icon`, ``name`` is the caption the
+        profile feature uses.  Plasma then renders the OSD like a media player
+        entry, and writes ``<name> Muted`` when the value is zero.  Without an
+        icon and without a name the generic volume OSD is used, so the user still
+        gets feedback.
         """
         percent = dbus.Int32(int(value))
-        if icon:
+        if icon or name:
             # Explicit signature: the interface also declares plain
             # volumeChanged overloads and dbus-python picks the wrong one when it
             # has to guess.
-            self._call("mediaPlayerVolumeChanged", "iss", [percent, "", str(icon)], "volume")
+            self._call("mediaPlayerVolumeChanged", "iss", [percent, str(name), str(icon)], "volume")
         else:
             self._call("volumeChanged", "i", [percent], "volume")
 

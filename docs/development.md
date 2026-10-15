@@ -5,11 +5,12 @@
 ```
 appvol/focus.py     the target window: pid, resourceClass, desktopFileName, process tree
 appvol/match.py     pure function: focus -> sink input indices
+appvol/profiles.py  profiles: model, profiles.toml, matcher, current selection
 appvol/volume.py    pure volume arithmetic: step, clamp, channel balance
 appvol/icon.py      icon name for the OSD, as the mixer resolves it, with a panel fallback
 appvol/osd.py       KDE OSD over D-Bus
 appvol/config.py    config.toml
-appvol/daemon.py    appvold: D-Bus service, pulsectl, KWin script loader
+appvol/daemon.py    appvold: D-Bus service, pulsectl, KWin script loader, shortcuts
 appvol/cli.py       appvol
 kwin/appvol.js      KWin script, pushes the focus
 desktop/            template of the KDE shortcut entry
@@ -34,15 +35,44 @@ python3 -m unittest discover -s tests -t .
 | File | Covers |
 | --- | --- |
 | `tests/test_match.py` | focus to stream matching, all three steps and the refusal reasons |
+| `tests/test_profiles.py` | ids, profiles.toml round trip, the profile matcher, the selection and its timeout |
 | `tests/test_volume.py` | step, clamping, channel balance, mute |
 | `tests/test_focus.py` | name normalisation, pid parsing, the `ppid` walk |
 | `tests/test_icon.py` | stream properties, theme walk, .desktop fallback |
 | `tests/test_config.py` | TOML parsing, bad values, clamping |
+| `tests/test_cli.py` | argument parsing and the readable answers |
 | `tests/test_shortcuts.py` | the desktop entry against the client command line |
 | `tests/test_osd.py` | the OSD wrapper across a name owner change |
 | `tests/test_daemon.py` | KWin script lookup in a checkout and in an installed layout |
 
 No test needs a session: the ones that touch the bus use fakes.
+
+## Profiles in a live session
+
+The daemon registers one KGlobalAccel action per profile, and an action can be
+pressed over D-Bus, which tests the whole path from the shortcut server to the
+OSD without touching the keyboard:
+
+```sh
+appvol profile add spiketest --include spotify --name "Spike"
+qdbus6 org.kde.kglobalaccel /component/appvol \
+       org.kde.kglobalaccel.Component.invokeShortcut profile_spiketest
+appvol profile list          # current: spiketest
+qdbus6 org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel.getComponent appvol
+qdbus6 org.kde.kglobalaccel /component/appvol org.kde.kglobalaccel.Component.shortcutNames
+appvol profile rm spiketest  # unregisters the action and drops the key
+```
+
+The keys live in `~/.config/kglobalshortcutsrc` under `[appvol]`, one line per
+action (`profile_spiketest=Ctrl+Alt+Shift+F9,none,Spike`). They are set in System
+Settings and survive a daemon restart, so a test can also assign one with
+`setShortcutKeys` and check that a fresh daemon still reports it.
+
+To exercise the idle timeout without waiting five minutes, start the daemon with a
+throwaway config: `appvold -v --config /tmp/appvol.toml` with
+`profile_idle_timeout = 10`. The return to Active is checked every ten seconds, so
+it happens between ten and twenty seconds after the last press, and the log says
+`profile <id> idle for 10s, back to active`.
 
 ## Release
 
