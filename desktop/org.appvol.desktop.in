@@ -1,0 +1,37 @@
+[Desktop Entry]
+Type=Application
+Name=appvol
+Comment=Volume of the audio streams of the focused window
+Exec=@APPVOL@ mute
+Icon=audio-volume-high
+NoDisplay=true
+StartupNotify=false
+
+# KDE reads the actions of this file as global shortcut commands: System Settings
+# -> Shortcuts lists the file as one component, and a bound key runs the Exec of
+# that action with the environment of the session. Every path below is therefore
+# absolute: the shortcut server has no ~/.local/bin in its PATH.
+#
+# A running kglobalaccel only picks up a file that declares shortcuts, and "none"
+# is how KDE spells "no key bound": the component appears at once and takes no
+# combination away from anyone. Without this line it would show up after a
+# re-login only.
+X-KDE-Shortcuts=none
+
+# The file itself is not something to launch: without this line KDE adds a
+# redundant "launch" action on top of the three named ones.
+X-KDE-GlobalShortcutType=Service
+
+Actions=VolumeUp;VolumeDown;Mute;
+
+[Desktop Action VolumeUp]
+Name=Volume up
+Exec=@APPVOL@ up
+
+[Desktop Action VolumeDown]
+Name=Volume down
+Exec=@APPVOL@ down
+
+[Desktop Action Mute]
+Name=Toggle mute
+Exec=@APPVOL@ mute

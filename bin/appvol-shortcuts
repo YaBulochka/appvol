@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Install (or remove) the KDE global shortcut entry for appvol.
+#
+# KDE's own mechanism for command shortcuts is a .desktop file with
+# X-KDE-GlobalAccel-CommandShortcut=true: System Settings -> Shortcuts lists it
+# as a component, and a bound key runs the Exec of the action. The Exec path
+# must be absolute, because the shortcut server of the session does not have
+# ~/.local/bin in its PATH ("Could not find the program ..." otherwise).
+#
+# Usage:
+#   bin/appvol-shortcuts            # install or refresh the entry
+#   bin/appvol-shortcuts --remove   # remove it again
+#
+# APPVOL_BIN overrides the client path written into the entry.
+set -euo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+root="$(dirname "$self")/.."
+template="$root/desktop/org.appvol.desktop.in"
+client="${APPVOL_BIN:-$root/bin/appvol}"
+target_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+target="$target_dir/org.appvol.desktop"
+
+if [ "${1:-}" = "--remove" ]; then
+    rm -f "$target"
+    command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
+    echo "appvol: removed $target"
+    exit 0
+fi
+
+if [ ! -f "$template" ]; then
+    echo "appvol: template not found: $template" >&2
+    exit 1
+fi
+if [ ! -x "$client" ]; then
+    echo "appvol: client is not executable: $client" >&2
+    exit 1
+fi
+
+client="$(readlink -f "$client")"
+mkdir -p "$target_dir"
+sed "s|@APPVOL@|$client|g" "$template" >"$target"
+chmod 644 "$target"
+
+# Let a running kglobalaccel notice the file without a re-login.
+command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
+
+cat <<EOF
+appvol: installed $target
+appvol: client is $client
+
+Assign the keys in System Settings -> Shortcuts: search for "appvol" and bind
+Volume up, Volume down and Toggle mute. Run with --remove to uninstall.
+EOF

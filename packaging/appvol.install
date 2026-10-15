@@ -1,0 +1,25 @@
+# The package ships files only: the daemon runs inside the user's session, so
+# enabling it and binding the keys stays with that user.
+post_install() {
+    cat <<'EOF'
+appvol: enable the daemon for your user (it does not run system-wide):
+            systemctl --user daemon-reload
+            systemctl --user enable --now appvold
+        then bind the keys in System Settings -> Shortcuts, searching for
+        "appvol" (actions: Volume up, Volume down, Toggle mute).
+EOF
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    cat <<'EOF'
+appvol: remember to stop the user unit as well:
+            systemctl --user disable --now appvold
+        A per-user copy of the shortcut entry (from install.sh or
+        bin/appvol-shortcuts) is not owned by this package; remove it with
+            rm -f ~/.local/share/applications/org.appvol.desktop
+EOF
+}

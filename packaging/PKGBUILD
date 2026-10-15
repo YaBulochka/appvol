@@ -1,0 +1,56 @@
+# Maintainer: appvol contributors
+pkgname=appvol
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Volume control for the audio streams of the focused window (KDE Plasma 6 on Wayland)"
+arch=('any')
+url="https://github.com/example/appvol"
+license=('MIT')
+depends=('python' 'python-dbus' 'python-gobject' 'python-pulsectl')
+optdepends=(
+    'plasma-desktop: the Plasma session the daemon drives (KWin script, OSD, shortcuts)'
+    'kwin: loads the script that reports the focused window'
+    'kglobalacceld: binds the hotkeys in System Settings -> Shortcuts'
+    'pipewire-pulse: the audio server the daemon talks to'
+)
+install="$pkgname.install"
+
+# The source is the release archive built by bin/appvol-release, which also
+# copies it next to this file.  The checksum is deliberately not part of the
+# file: the archive contains this PKGBUILD, so any sum written here would
+# describe a different archive.  bin/appvol-release writes the sum to
+# appvol-$pkgver.tar.gz.sha256 and to dist/ instead.
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    # makepkg unpacks the archive into $srcdir but stays in its own directory.
+    cd "$srcdir/$pkgname-$pkgver"
+
+    local site
+    site="$(python -c 'import sys; print("lib/python{}.{}/site-packages".format(*sys.version_info[:2]))')"
+
+    install -d "$pkgdir/usr/$site/appvol"
+    install -m644 appvol/*.py "$pkgdir/usr/$site/appvol/"
+
+    # The daemon looks for the KWin script in the XDG data dirs as well, which is
+    # where a package install keeps it.
+    install -Dm644 kwin/appvol.js "$pkgdir/usr/share/appvol/appvol.js"
+
+    # Launchers: the module is already importable, so no path discovery is needed.
+    install -d "$pkgdir/usr/bin"
+    printf '#!/bin/sh\nexec python3 -m appvol.cli "$@"\n' >"$pkgdir/usr/bin/appvol"
+    printf '#!/bin/sh\nexec python3 -m appvol.daemon "$@"\n' >"$pkgdir/usr/bin/appvold"
+    chmod 755 "$pkgdir/usr/bin/appvol" "$pkgdir/usr/bin/appvold"
+
+    # Both templates get absolute paths: the shortcut server has no ~/.local/bin
+    # in PATH, and systemd does not read the user's PATH at all.
+    install -d "$pkgdir/usr/share/applications" "$pkgdir/usr/lib/systemd/user"
+    sed 's|@APPVOL@|/usr/bin/appvol|g' desktop/org.appvol.desktop.in \
+        >"$pkgdir/usr/share/applications/org.appvol.desktop"
+    sed 's|@APPVOLD@|/usr/bin/appvold|' systemd/appvold.service.in \
+        >"$pkgdir/usr/lib/systemd/user/appvold.service"
+
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

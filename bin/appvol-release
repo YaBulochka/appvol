@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Build the release: archive, checksum, and (with --package) the pacman package.
+#
+#   bin/appvol-release             # dist/appvol-<version>.tar.gz + .sha256
+#   bin/appvol-release --package   # ... and the pacman package in dist/
+#   bin/appvol-release --allow-dirty
+#
+# The version comes from appvol/__init__.py, and packaging/PKGBUILD is kept in
+# sync with it.  In a git checkout the archive is built with `git archive HEAD`,
+# so only tracked files reach the release.
+set -euo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+root="$(dirname "$self")/.."
+cd "$root"
+
+with_package=no
+allow_dirty=no
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --package) with_package=yes ;;
+        --allow-dirty) allow_dirty=yes ;;
+        -h|--help)
+            sed -n '2,10p' "$self" | sed 's/^# \{0,1\}//'
+            echo
+            echo "Options: --package  --allow-dirty"
+            exit 0
+            ;;
+        *)
+            echo "appvol-release: unknown option: $1" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+version="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' appvol/__init__.py)"
+if [ -z "$version" ]; then
+    echo "appvol-release: cannot read the version from appvol/__init__.py" >&2
+    exit 1
+fi
+
+archive="appvol-$version.tar.gz"
+mkdir -p dist
+
+if [ -d .git ]; then
+    if [ "$allow_dirty" = no ] && [ -n "$(git status --porcelain)" ]; then
+        echo "appvol-release: the working tree is dirty; commit first or pass --allow-dirty" >&2
+        git status --short >&2
+        exit 1
+    fi
+    git archive --format=tar.gz --prefix="appvol-$version/" -o "dist/$archive" HEAD
+else
+    echo "appvol-release: not a git checkout, archiving the working tree"
+    tar --exclude=./.git --exclude=./dist --exclude='./packaging/*.tar.gz' \
+        --exclude='./packaging/*.sha256' --exclude='./packaging/*.pkg.tar.*' \
+        --exclude=__pycache__ --exclude='*.pyc' \
+        --transform "s|^\./|appvol-$version/|" -czf "dist/$archive" .
+fi
+
+for required in \
+    "appvol-$version/appvol/__init__.py" \
+    "appvol-$version/kwin/appvol.js" \
+    "appvol-$version/desktop/org.appvol.desktop.in" \
+    "appvol-$version/systemd/appvold.service.in" \
+    "appvol-$version/install.sh" \
+    "appvol-$version/packaging/PKGBUILD" \
+    "appvol-$version/LICENSE"; do
+    if ! tar tzf "dist/$archive" "$required" >/dev/null 2>&1; then
+        echo "appvol-release: $required is missing from the archive" >&2
+        exit 1
+    fi
+done
+
+sum="$(sha256sum "dist/$archive" | cut -d' ' -f1)"
+printf '%s  %s\n' "$sum" "$archive" >"dist/$archive.sha256"
+
+# The package is built from this very archive, so makepkg finds it next to the
+# PKGBUILD.  Its checksum lives in the .sha256 file: the archive contains the
+# PKGBUILD itself, so no sum inside it could match.
+cp "dist/$archive" "packaging/$archive"
+cp "dist/$archive.sha256" "packaging/$archive.sha256"
+
+pkgbuild=packaging/PKGBUILD
+if ! grep -q "^pkgver=$version$" "$pkgbuild"; then
+    sed -i "s|^pkgver=.*|pkgver=$version|" "$pkgbuild"
+    sed -i "s|^pkgrel=.*|pkgrel=1|" "$pkgbuild"
+    echo "appvol-release: $pkgbuild set to $version-1"
+fi
+
+built=""
+if [ "$with_package" = yes ]; then
+    if ! command -v makepkg >/dev/null 2>&1; then
+        echo "appvol-release: --package needs makepkg (pacman-contrib)" >&2
+        exit 1
+    fi
+    ( cd packaging && makepkg --force --cleanbuild --noconfirm )
+    package="$(find packaging -maxdepth 1 -name "appvol-$version-*.pkg.tar.*" -printf '%f\n' | head -1)"
+    cp "packaging/$package" dist/
+    built="        dist/$package"
+    echo "appvol-release: package built: dist/$package"
+fi
+
+echo
+echo "appvol: release $version"
+echo "        dist/$archive  ($(du -h "dist/$archive" | cut -f1), sha256 ${sum:0:16}...)"
+[ -n "$built" ] && echo "$built"
+echo "        install:  (cd packaging && makepkg -si)   or   sudo pacman -U dist/*.pkg.tar.*"
+echo "        or:       ./install.sh --service          (per-user, no root)"
+if [ -d .git ]; then
+    if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+        echo "        git tag v$version is in place"
+    else
+        echo "        HEAD is not tagged yet:  git tag -a v$version -m \"appvol $version\""
+    fi
+fi

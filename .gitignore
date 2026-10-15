@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+
+# bin/appvol-release writes both of these.
+dist/
+packaging/*.tar.gz
+packaging/*.sha256
+packaging/*.pkg.tar.*
+packaging/src/
+packaging/pkg/
