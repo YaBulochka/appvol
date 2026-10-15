@@ -192,6 +192,16 @@ class ClientTests(unittest.TestCase):
         self.assertAlmostEqual(float(args[1]), 42.5)
         self.assertIsInstance(args[1], dbus.Double)
 
+    def test_set_step_sends_a_double(self) -> None:
+        proxy = FakeProxy()
+        client = Client(connect=lambda: proxy)
+        client.set_step("spotify", 3.0)
+        name, args = proxy.calls[0]
+        self.assertEqual(name, "SetStep")
+        self.assertEqual(args[0], "spotify")
+        self.assertAlmostEqual(float(args[1]), 3.0)
+        self.assertIsInstance(args[1], dbus.Double)
+
     def test_add_profile_sends_plain_lists(self) -> None:
         proxy = FakeProxy()
         client = Client(connect=lambda: proxy)
@@ -302,6 +312,26 @@ class BridgeTests(unittest.TestCase):
         name, args = self.proxy.calls[0]
         self.assertEqual(name, "SetVolume")
         self.assertEqual(args[0], "spotify")
+
+    def test_a_step_change_is_written_and_the_panel_is_read_again(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.proxy.calls.clear()
+
+        bridge.setStep("spotify", 4.0)
+
+        self.assertEqual(
+            [name for name, _args in self.proxy.calls][:3],
+            ["SetStep", "Overview", "Applications"],
+        )
+        self.assertEqual(list(self.proxy.calls[0][1]), ["spotify", 4.0])
+
+    def test_the_active_profile_asks_for_the_global_step(self) -> None:
+        bridge = self.make()
+        bridge.setStep("active", 3.0)
+        name, args = self.proxy.calls[0]
+        self.assertEqual(name, "SetStep")
+        self.assertEqual(args[0], "active")
 
     def test_saving_a_profile_passes_the_lists_through(self) -> None:
         bridge = self.make()

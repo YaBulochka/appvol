@@ -16,7 +16,29 @@ Kirigami.AbstractCard {
     readonly property bool hasVolume: profile && profile.percent !== null && profile.percent !== undefined
     readonly property int maximum: Math.max(1, Math.round(
         (profile && profile.max_volume) || (bridge.config.max_volume) || 150))
-    readonly property real step: (profile && profile.step) || bridge.config.step || 5
+    readonly property real globalStep: bridge.config.step || 5
+    // The built-in profile has no entry of its own: its step is the global one,
+    // and zero has no meaning there.
+    readonly property bool ownStep: profile && !profile.builtin
+    readonly property real stepValue: {
+        if (!profile) {
+            return globalStep
+        }
+        if (profile.builtin) {
+            return profile.step || globalStep
+        }
+        return profile.step || 0
+    }
+    readonly property string stepHint: card.ownStep
+        ? "The volume keys move this profile by this much. 0 follows the global step of config.toml."
+        : "The volume keys move the focused window by this much; the Active profile keeps its step in config.toml."
+
+    function stepLabel(value) {
+        if (value === 0 && card.ownStep) {
+            return "global " + globalStep + " %"
+        }
+        return Math.round(value) + " %"
+    }
 
     // The daemon is the source of truth for the volume; the slider follows it
     // unless the user is dragging, in which case it keeps the value under the
@@ -163,10 +185,10 @@ Kirigami.AbstractCard {
                         return ""
                     }
                     if (card.profile.builtin) {
-                        return "Reached with the volume keys; step " + card.step + " %"
+                        return "Reached with the volume keys"
                     }
                     const key = card.profile.key
-                    return (key ? "Key: " + key : "No key bound") + " · step " + card.step + " %"
+                    return key ? "Key: " + key : "No key bound"
                 }
             }
 
@@ -178,6 +200,24 @@ Kirigami.AbstractCard {
             }
 
             Item { Layout.fillWidth: true }
+
+            Controls.Label {
+                opacity: 0.7
+                font: Kirigami.Theme.smallFont
+                text: "Step:"
+            }
+
+            Controls.SpinBox {
+                id: stepBox
+                editable: true
+                from: card.ownStep ? 0 : 1
+                to: 50
+                value: card.stepValue
+                textFromValue: (value) => card.stepLabel(value)
+                Controls.ToolTip.visible: hovered
+                Controls.ToolTip.text: card.stepHint
+                onValueModified: bridge.setStep(card.profile.id, value)
+            }
         }
 
         Connections {
@@ -187,6 +227,10 @@ Kirigami.AbstractCard {
                     volumeSlider.value = card.hasVolume ? card.profile.percent : 0
                 }
                 muteButton.checked = card.hasVolume && card.profile.muted === true
+                // The spin box takes its value from the daemon after every write,
+                // like the slider; assigning it drops the binding, so it is set
+                // here, on the one signal that follows a read.
+                stepBox.value = card.stepValue
             }
         }
     }

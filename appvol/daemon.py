@@ -39,7 +39,8 @@ import pulsectl
 
 from . import __version__
 from .apps import group_streams
-from .config import Config, load as load_config
+from .config import Config, load as load_config, save as save_config
+from .config import default_path as default_config_path
 from .focus import Focus, focus_from_dbus, read_parent_pid
 from .icon import resolvable, resolve as resolve_icon
 from .match import STEP_DESCENDANT, MatchResult, Stream, match_streams, stream_label
@@ -58,6 +59,7 @@ from .profiles import (
     load as load_profiles,
     match_profile,
     profile_from_action,
+    replace_step,
     save as save_profiles,
     validate_id,
 )
@@ -407,6 +409,7 @@ class Daemon(dbus.service.Object):
         pulse: PulseManager,
         osd: Osd,
         profiles_path: Path | None = None,
+        config_path: Path | None = None,
     ) -> None:
         super().__init__(bus, OBJECT_PATH)
         self.config = config
@@ -415,6 +418,7 @@ class Daemon(dbus.service.Object):
         self.state = State()
         self.profiles: list[Profile] = []
         self.profiles_path = Path(profiles_path) if profiles_path else default_profiles_path()
+        self.config_path = Path(config_path) if config_path else default_config_path()
         self.shortcuts = ShortcutActions(bus, self.on_shortcut)
 
     # -- profiles ----------------------------------------------------------
@@ -468,6 +472,11 @@ class Daemon(dbus.service.Object):
             "ok": True,
             "current": self.state.selection.current,
             "idle_timeout": self.config.profile_idle_timeout,
+            "config": {
+                "step": self.config.step,
+                "max_volume": self.config.max_volume,
+                "osd": self.config.osd,
+            },
             "profiles": [profile.summary() for profile in self.profiles],
         }
 
@@ -570,6 +579,31 @@ class Daemon(dbus.service.Object):
         log.info("removed profile %s", identifier)
         return self._profiles()
 
+    def _set_step(self, profile_id: str, step: float) -> dict:
+        """Change the step of one profile, or the global one for Active.
+
+        The built-in profile has no entry of its own, so its step is the global
+        one in ``config.toml``; a profile carries its own, and a zero step gives
+        the override up.
+        """
+        identifier = profile_id.strip().lower()
+        if identifier in ("", ACTIVE_ID):
+            if step <= 0:
+                raise _invalid_argument(
+                    "the global step must be positive; a profile step of 0 means the global one"
+                )
+            self.config = replace(self.config, step=step)
+            save_config(self.config, self.config_path)
+            log.info("global step: %g%%", step)
+            return self._profiles()
+
+        if find_profile(self.profiles, identifier) is None:
+            raise _invalid_argument(f"no such profile: {profile_id!r}")
+        self.profiles = replace_step(self.profiles, identifier, step)
+        save_profiles(self.profiles, self.profiles_path)
+        log.info("profile %s: step %s", identifier, f"{step:g}%" if step else "the global one")
+        return self._profiles()
+
     # -- D-Bus API ---------------------------------------------------------
 
     @dbus.service.method(IFACE, in_signature="isss", out_signature="i")
@@ -620,6 +654,15 @@ class Daemon(dbus.service.Object):
     def SetMute(self, profile_id, muted) -> str:  # noqa: N802
         """Set mute on the streams of ``profile_id`` to ``muted``, without the OSD."""
         return json.dumps(self._set_mute(self._profile(str(profile_id)), bool(muted)))
+
+    @dbus.service.method(IFACE, in_signature="sd", out_signature="s")
+    def SetStep(self, profile_id, step) -> str:  # noqa: N802
+        """Set the step of ``profile_id`` in percent; empty or Active is the global one.
+
+        A step of zero on a stream profile drops its override, so the profile
+        follows the global step again.
+        """
+        return json.dumps(self._set_step(str(profile_id), _step(step)))
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def Applications(self) -> str:  # noqa: N802
@@ -1154,14 +1197,19 @@ def _invalid_argument(message: str) -> dbus.DBusException:
 class Appvol:
     """Wires the daemon, the pulse connection and the KWin script together."""
 
-    def __init__(self, config: Config, profiles_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        config: Config,
+        profiles_path: Path | None = None,
+        config_path: Path | None = None,
+    ) -> None:
         self.config = config
         self.bus = dbus.SessionBus()
         # do_not_queue: a second daemon must fail instead of waiting for the name.
         self.bus_name = dbus.service.BusName(BUS_NAME, self.bus, do_not_queue=True)
         self.pulse = PulseManager()
         self.osd = Osd(config.osd)
-        self.daemon = Daemon(self.bus, config, self.pulse, self.osd, profiles_path)
+        self.daemon = Daemon(self.bus, config, self.pulse, self.osd, profiles_path, config_path)
         script_path = Path(config.kwin_script).expanduser() if config.kwin_script else find_kwin_script()
         self.kwin = KWinManager(self.bus, script_path)
         self.loop = GLib.MainLoop()
@@ -1203,9 +1251,9 @@ class Appvol:
         )
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self._stop)
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self._stop)
-        log.info("appvol daemon %s started, step %.1f%%, max %.0f%%, osd %s, profiles %s",
+        log.info("appvol daemon %s started, step %.1f%%, max %.0f%%, osd %s, profiles %s, config %s",
                  __version__, self.config.step, self.config.max_volume, self.config.osd,
-                 self.daemon.profiles_path)
+                 self.daemon.profiles_path, self.daemon.config_path)
         log.info("%d profile(s) loaded, idle timeout %.0fs",
                  len(self.daemon.profiles), self.config.profile_idle_timeout)
         self.loop.run()
@@ -1254,12 +1302,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
-    config = load_config(args.config)
+    config_path = args.config or default_config_path()
+    config = load_config(config_path)
     if args.kwin_script is not None:
         config = replace(config, kwin_script=str(args.kwin_script))
 
     try:
-        app = Appvol(config, args.profiles)
+        app = Appvol(config, args.profiles, config_path)
     except dbus.exceptions.NameExistsException:
         log.error("%s is already running, exiting", BUS_NAME)
         return 1

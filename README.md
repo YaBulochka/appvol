@@ -113,12 +113,13 @@ without a press on the profile return the keys to the Active profile.
 ## Window and tray icon
 
 `appvol-gui` (or `bin/appvol-gui` from the checkout) opens a small window listing
-every profile with its live volume, its scope and the key bound to it, and a tray
-icon with the profiles, the three volume actions and **Quit**. The sliders and the
-mute switches act on the live streams, **New Profile** and **Edit** open a form
-whose application list is what is playing right now, and **Bind Keys…** opens
-System Settings → Shortcuts, where the profiles are listed under **appvol
-profiles**. The window shows the binding and never sets one.
+every profile with its live volume, its scope, the key bound to it and the step of
+the volume keys, and a tray icon with the profiles, the three volume actions and
+**Quit**. The sliders and the mute switches act on the live streams, the step can
+be changed in the row itself, **New Profile** and **Edit** open a form whose
+application list is what is playing right now, and **Bind Keys…** opens System
+Settings → Shortcuts, where the profiles are listed under **appvol profiles**. The
+window shows the binding and never sets one.
 
 It needs PySide6, Kirigami, `qqc2-desktop-style` and `breeze-icons`; the daemon
 and the CLI run without any of them. [docs/gui.md](docs/gui.md) has the details.
@@ -134,6 +135,9 @@ osd = true                   # show the KDE OSD
 profile_idle_timeout = 300   # seconds before a profile returns to Active, 0 disables
 # kwin_script = "/path/to/appvol.js"   # override the bundled KWin script
 ```
+
+The window writes `step` here when the step of the Active profile is changed in
+its row; the daemon leaves the rest of the file to you.
 
 ## Troubleshooting
 

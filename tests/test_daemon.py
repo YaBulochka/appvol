@@ -12,8 +12,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import dbus
+
 from appvol import daemon
+from appvol.config import Config
 from appvol.profiles import MODE_FOCUS, OSD_NAME_ALWAYS, OSD_NAME_NEVER, Profile, active_profile
+from appvol.profiles import parse as parse_profiles
 
 
 class FindKwinScriptTest(unittest.TestCase):
@@ -199,6 +203,110 @@ class OsdCaptionTest(unittest.TestCase):
     def test_never_silences_a_stream_profile(self) -> None:
         profile = Profile(id="spotify", name="Spotify", osd_name=OSD_NAME_NEVER)
         self.assertEqual(daemon.osd_caption(profile, "Spotify"), "")
+
+
+class StepDaemon(daemon.Daemon):
+    """A ``Daemon`` with the files and the selection, but no session bus."""
+
+    def __init__(self, base: Path, profiles=(), config: Config | None = None) -> None:
+        self.config = config or Config()
+        self.profiles = list(profiles)
+        self.profiles_path = base / "profiles.toml"
+        self.config_path = base / "config.toml"
+        self.state = daemon.State()
+
+
+class SetStepTest(unittest.TestCase):
+    """The step of a row: one profile's own, or the global one for Active.
+
+    Both are edits of a file the daemon owns while it runs, so the tests read the
+    files back instead of trusting the in-memory copy alone.
+    """
+
+    def test_a_profile_step_is_written_to_profiles_toml(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            app = StepDaemon(base, [Profile(id="spotify", name="Spotify", step=2.0)])
+
+            answer = app._set_step("spotify", 7.0)
+
+            self.assertEqual(answer["profiles"][0]["step"], 7.0)
+            stored = parse_profiles(app.profiles_path.read_text(encoding="utf-8"))
+            self.assertEqual(stored[0].step, 7.0)
+
+    def test_a_zero_step_hands_the_choice_back_to_the_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            app = StepDaemon(base, [Profile(id="spotify", step=2.0)])
+
+            app._set_step("spotify", 0.0)
+
+            stored = parse_profiles(app.profiles_path.read_text(encoding="utf-8"))
+            self.assertIsNone(stored[0].step)
+
+    def test_the_other_profiles_keep_their_own_step(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            app = StepDaemon(
+                base, [Profile(id="spotify", step=2.0), Profile(id="cs2", step=10.0)]
+            )
+
+            app._set_step("spotify", 0.0)
+
+            stored = parse_profiles(app.profiles_path.read_text(encoding="utf-8"))
+            self.assertIsNone(stored[0].step)
+            self.assertEqual(stored[1].step, 10.0)
+
+    def test_the_active_profile_writes_the_global_step(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            app = StepDaemon(base, [Profile(id="spotify")])
+
+            answer = app._set_step("active", 3.0)
+
+            self.assertEqual(app.config.step, 3.0)
+            self.assertEqual(answer["config"]["step"], 3.0)
+            written = app.config_path.read_text(encoding="utf-8")
+            self.assertIn("step = 3", written)
+            self.assertEqual(daemon.load_config(app.config_path).step, 3.0)
+
+    def test_the_global_step_keeps_the_rest_of_the_configuration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            config = Config(step=5.0, max_volume=120.0, osd=False, profile_idle_timeout=60.0)
+            app = StepDaemon(base, config=config)
+
+            app._set_step("", 4.0)
+
+            stored = daemon.load_config(app.config_path)
+            self.assertEqual(
+                (stored.step, stored.max_volume, stored.osd, stored.profile_idle_timeout),
+                (4.0, 120.0, False, 60.0),
+            )
+
+    def test_the_global_step_may_not_be_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+
+            with self.assertRaises(dbus.DBusException) as caught:
+                app._set_step("active", 0.0)
+
+            self.assertEqual(caught.exception.get_dbus_name(), "org.appvol.Error.InvalidArgument")
+            self.assertEqual(app.config.step, Config().step)
+
+    def test_an_unknown_profile_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp), [Profile(id="spotify")])
+
+            with self.assertRaises(dbus.DBusException) as caught:
+                app._set_step("cs2", 5.0)
+
+            self.assertEqual(caught.exception.get_dbus_name(), "org.appvol.Error.InvalidArgument")
+
+    def test_a_negative_step_is_refused_before_any_write(self) -> None:
+        with self.assertRaises(dbus.DBusException):
+            daemon._step(-1.0)
+        self.assertEqual(daemon._step(0.0), 0.0)
 
 
 if __name__ == "__main__":

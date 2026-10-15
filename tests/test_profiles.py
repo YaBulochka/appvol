@@ -24,6 +24,7 @@ from appvol.profiles import (
     match_profile,
     parse,
     profile_from_action,
+    replace_step,
     save,
     validate_id,
 )
@@ -180,6 +181,28 @@ class DumpTests(unittest.TestCase):
     def test_load_without_a_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(load(Path(directory) / "profiles.toml"), [])
+
+
+class StepTests(unittest.TestCase):
+    """Changing one profile's step, as the row of the window does."""
+
+    PROFILES = [Profile(id="spotify", name="Spotify", step=2.0), Profile(id="cs2", step=10.0)]
+
+    def test_only_the_named_profile_changes(self) -> None:
+        profiles = replace_step(self.PROFILES, "spotify", 7.0)
+        self.assertEqual([profile.step for profile in profiles], [7.0, 10.0])
+
+    def test_a_zero_step_clears_the_override(self) -> None:
+        profiles = replace_step(self.PROFILES, "spotify", 0.0)
+        self.assertIsNone(profiles[0].step)
+        self.assertEqual(profiles[1].step, 10.0)
+
+    def test_an_unknown_id_keeps_every_profile(self) -> None:
+        self.assertEqual(replace_step(self.PROFILES, "discord", 5.0), self.PROFILES)
+
+    def test_the_original_list_is_left_alone(self) -> None:
+        replace_step(self.PROFILES, "spotify", 7.0)
+        self.assertEqual(self.PROFILES[0].step, 2.0)
 
 
 class PanelFilterTests(unittest.TestCase):

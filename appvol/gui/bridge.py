@@ -126,6 +126,15 @@ class Bridge(QObject):
         """Set mute on a profile, from a switch."""
         self._write(self.client.set_mute, str(profile_id), bool(muted))
 
+    @Slot(str, float)
+    def setStep(self, profile_id: str, percent: float) -> None:
+        """Set the step of a profile, from the row of the list.
+
+        The built-in Active profile has no entry in ``profiles.toml``: its step is
+        the global one, and the daemon writes it to ``config.toml``.
+        """
+        self._write(self.client.set_step, str(profile_id), float(percent))
+
     @Slot(str, str, "QVariantList", "QVariantList", float, float, str, str)
     def saveProfile(
         self,

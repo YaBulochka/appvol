@@ -50,6 +50,7 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `ToggleMute()` | ` -> s` | client | JSON result for the current profile |
 | `ToggleMuteTarget(profile)` | `s -> s` | client, tray | JSON result for one profile |
 | `SetMute(profile, muted)` | `sb -> s` | window | JSON result, absolute, without the OSD |
+| `SetStep(profile, step)` | `sd -> s` | window | JSON: the profiles after the change, with the global step for Active |
 | `ToggleProfile(profile)` | `s -> s` | client, keys | switch the profile, answer describes the OSD |
 | `SwitchProfile(profile, osd)` | `sb -> s` | window, tray | make a profile current, the toggle without the "back" |
 | `Profiles()` | ` -> s` | client | JSON: the profiles and the current one |
@@ -68,7 +69,11 @@ the client prints `appvold is not running (start it with: systemctl --user start
 appvold)` and exits with status 1.
 
 A step of zero means "the step of the profile, else the one from the config", so
-a client never has to know which profile is current.
+a client never has to know which profile is current. `SetStep` records the choice:
+on a stream profile it writes that profile's own `step` into `profiles.toml`, and
+on the built-in Active profile it writes the global `step`, which is the only key
+the daemon puts into `config.toml`. The file comes back in canonical form, so a
+comment of a hand edit there does not survive that one change.
 
 `SetVolume` and `SetMute` are the absolute counterparts of `Adjust` and
 `ToggleMute`, and they stay quiet on the OSD: a slider sends one call per release
@@ -228,4 +233,5 @@ means the default for that key alone, with a warning in the log. `step` and
 OSD, `profile_idle_timeout` is the number of seconds before a profile returns to
 Active, and `kwin_script` overrides the script location. The command line wins over
 the file (`appvol up --step 2`, `appvold --config FILE`, `appvold --profiles FILE`,
-`appvold --kwin-script FILE`).
+`appvold --kwin-script FILE`). The daemon writes the file only for the global `step`,
+when the window changes it; every other key stays the user's.

@@ -101,6 +101,10 @@ class Client:
         """Set mute on a profile; silent, for a switch."""
         return self.call("SetMute", str(profile_id), bool(muted))
 
+    def set_step(self, profile_id: str, percent: float) -> dict:
+        """Set the step of a profile; the built-in id sets the global step."""
+        return self.call("SetStep", str(profile_id), dbus.Double(float(percent)))
+
     def adjust(self, direction: str, step: float = 0.0) -> dict:
         """One step up or down on the current profile, with the OSD."""
         return self.call("AdjustTarget", "", str(direction), dbus.Double(float(step)))

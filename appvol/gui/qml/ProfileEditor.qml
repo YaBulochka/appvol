@@ -260,7 +260,7 @@ Kirigami.OverlaySheet {
             wrapMode: Text.WordWrap
             opacity: 0.7
             font: Kirigami.Theme.smallFont
-            text: "Step 0 follows the global step of appvol.toml. “auto” writes the profile name into "
+            text: "Step 0 follows the global step of config.toml. “auto” writes the profile name into "
                 + "the OSD only while the profile is not the Active one."
         }
     }

@@ -21,7 +21,7 @@ import logging
 import os
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -158,6 +158,19 @@ def find(profiles: Iterable[Profile], profile_id: str) -> Profile | None:
         if profile.id == profile_id:
             return profile
     return None
+
+
+def replace_step(profiles: Iterable[Profile], profile_id: str, step: float | None) -> list[Profile]:
+    """Return the profiles with the step of one of them replaced.
+
+    A zero step clears the override, so the profile follows ``config.toml``
+    again, which is the state a profile is created in.
+    """
+    value = step or None
+    return [
+        replace(profile, step=value) if profile.id == profile_id else profile
+        for profile in profiles
+    ]
 
 
 def is_panel_stream(stream: Stream) -> bool:

@@ -1,10 +1,12 @@
-"""Unit tests for configuration parsing."""
+"""Unit tests for configuration parsing and writing."""
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
-from appvol.config import Config, parse
+from appvol.config import Config, dumps, load, parse, save
 
 
 class ConfigTests(unittest.TestCase):
@@ -45,6 +47,40 @@ class ConfigTests(unittest.TestCase):
         config = parse("step = 5\nmax_volume = 120\n")
         self.assertAlmostEqual(config.step_fraction, 0.05)
         self.assertAlmostEqual(config.max_volume_fraction, 1.2)
+
+
+class ConfigWriteTests(unittest.TestCase):
+    """The daemon writes the file when the window changes the global step."""
+
+    def test_a_configuration_round_trips(self) -> None:
+        config = Config(step=2.5, max_volume=120.0, osd=False, profile_idle_timeout=60.0)
+        self.assertEqual(parse(dumps(config)), config)
+
+    def test_every_key_is_written(self) -> None:
+        text = dumps(Config())
+        self.assertIn("step = 5", text)
+        self.assertIn("max_volume = 100", text)
+        self.assertIn("osd = true", text)
+        self.assertIn("profile_idle_timeout = 300", text)
+
+    def test_the_kwin_script_survives(self) -> None:
+        config = Config(kwin_script="/opt/appvol/appvol.js")
+        self.assertEqual(parse(dumps(config)), config)
+
+    def test_save_replaces_the_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "appvol" / "config.toml"
+            save(Config(step=3.0), path)
+            self.assertEqual(load(path).step, 3.0)
+            save(Config(step=7.0), path)
+            self.assertEqual(load(path).step, 7.0)
+            self.assertEqual(list(path.parent.glob("*.tmp")), [])
+
+    def test_a_missing_directory_is_created(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deep" / "config.toml"
+            save(Config(), path)
+            self.assertTrue(path.exists())
 
 
 if __name__ == "__main__":

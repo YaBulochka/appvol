@@ -45,6 +45,10 @@ button on the left:
   "No key bound". **Bind Keys…** opens System Settings → Shortcuts, where the
   profiles are listed under **appvol profiles**. The window shows the binding but
   never sets one.
+* **Step.** The value the volume keys move by sits in the same row, so it can be
+  changed without opening the editor. A stream profile may hand the choice back
+  with 0, which means "the global step"; the Active row shows that global step and
+  writes it to `config.toml` when it changes.
 * **Footer.** When the keys return to Active after `profile_idle_timeout`, and the
   version of the running installation.
 
@@ -69,7 +73,7 @@ stays empty instead of pretending.
   every application stream with the shell left out; a name in **Exclude** turns the
   profile into "everything except this".
 * **Step** and **Maximum volume** are per profile; a step of 0 follows
-  `config.toml`.
+  `config.toml`, which is the value the Active row of the list edits.
 * **Icon** overrides the icon of the OSD and of the row, and **OSD name** decides
   whether the profile name appears there.
 

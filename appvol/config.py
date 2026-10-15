@@ -1,7 +1,9 @@
 """Configuration loading for appvol.
 
 The configuration lives in ``~/.config/appvol/config.toml``.  A missing file
-means defaults, a malformed value means defaults for that single key.
+means defaults, a malformed value means defaults for that single key.  The
+daemon writes the file only when the window changes the global step; every other
+edit is the user's.
 """
 
 from __future__ import annotations
@@ -124,3 +126,39 @@ def load(path: Path | None = None) -> Config:
         log.warning("config: cannot read %s (%s), using defaults", path, exc)
         return Config()
     return parse(text)
+
+
+HEADER = "# appvol configuration.  Written by appvold when the window changes the global step.\n"
+
+
+def dumps(config: Config) -> str:
+    """Render a configuration as TOML text, one key per line."""
+    lines = [
+        f"step = {config.step:g}",
+        f"max_volume = {config.max_volume:g}",
+        f"osd = {str(config.osd).lower()}",
+        f"profile_idle_timeout = {config.profile_idle_timeout:g}",
+    ]
+    if config.kwin_script:
+        lines.append(f"kwin_script = {_quote(config.kwin_script)}")
+    return HEADER + "\n".join(lines) + "\n"
+
+
+def _quote(text: str) -> str:
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    escaped = "".join("?" if ch < " " or ch == "\x7f" else ch for ch in escaped)
+    return f'"{escaped}"'
+
+
+def save(config: Config, path: Path | None = None) -> Path:
+    """Write the configuration, replacing the file in one step.
+
+    The file comes back in canonical form, so a comment of a hand edit does not
+    survive a change made from the window.
+    """
+    path = Path(path) if path else default_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(dumps(config), encoding="utf-8")
+    os.replace(temporary, path)
+    return path
