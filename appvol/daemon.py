@@ -94,6 +94,14 @@ KGA_COMPONENT_IFACE = "org.kde.kglobalaccel.Component"
 KGA_COMPONENT = "appvol"
 KGA_COMPONENT_FRIENDLY = "appvol profiles"
 
+# ``KGlobalAccelD::SetShortcutFlag::SetPresent``.  kglobalacceld grabs a key only
+# for a shortcut whose owner has marked it present (``GlobalShortcut::setActive``
+# registers the key, ``setIsPresent`` is what reaches it).  A bare ``doRegister``
+# leaves the action in the registry with its key from ``kglobalshortcutsrc``, so
+# System Settings shows the binding and ``invokeShortcut`` answers, while a real
+# key press reaches nobody: the key was never grabbed.
+KGA_SET_PRESENT = 2
+
 # How often the daemon checks whether the current profile went idle.
 PROFILE_CHECK_SECONDS = 10
 
@@ -318,7 +326,14 @@ class ShortcutActions:
         return dbus.Interface(self.bus.get_object(KGA_SERVICE, KGA_PATH), KGA_IFACE)
 
     def sync(self, profiles: Sequence[Profile]) -> None:
-        """Register an action per profile and drop the actions that are gone."""
+        """Register an action per profile and drop the actions that are gone.
+
+        Registering is two calls per action: ``doRegister`` creates the action
+        (and, on the first call, the component), then ``setShortcutKeys`` with
+        ``SetPresent`` makes kglobalacceld grab the keys it holds for it.  The
+        second call is what turns a key in ``kglobalshortcutsrc`` into a key that
+        fires; without it the binding is visible everywhere and dead.
+        """
         wanted = {action_name(profile.id): profile.display_name for profile in profiles}
         if not wanted and not self.component_path:
             # Nothing to register and no component from an earlier run: asking
@@ -330,7 +345,14 @@ class ShortcutActions:
             for action, friendly in wanted.items():
                 # A four element action id creates the action and, on the first
                 # call, the component itself (kglobalacceld, createComponent).
-                iface.doRegister([KGA_COMPONENT, action, KGA_COMPONENT_FRIENDLY, friendly])
+                action_id = [KGA_COMPONENT, action, KGA_COMPONENT_FRIENDLY, friendly]
+                iface.doRegister(action_id)
+                # Autoloading, the default: the keys pass through from
+                # kglobalshortcutsrc and the ones given here are ignored, so the
+                # binding the user assigned survives.  They are read back first
+                # because a brand new action is created fresh, where autoloading
+                # cannot help yet and the given keys would be the ones stored.
+                iface.setShortcutKeys(action_id, iface.shortcutKeys(action_id), KGA_SET_PRESENT)
             for action in set(self.actions) - set(wanted):
                 try:
                     iface.unregister(KGA_COMPONENT, action)
@@ -413,6 +435,10 @@ class Daemon(dbus.service.Object):
         profile = find_profile(self.profiles, self.state.selection.current)
         return profile if profile is not None else active_profile()
 
+    def resync_shortcuts(self) -> None:
+        """Register the profile actions again, after the server came back."""
+        self.shortcuts.sync(self.profiles)
+
     def on_shortcut(self, action: str) -> None:
         """A profile key was pressed."""
         profile_id = profile_from_action(action)
@@ -484,7 +510,7 @@ class Daemon(dbus.service.Object):
             percent = int(round(max(peak(stream.volume) for stream in targets) * 100))
             payload["percent"] = percent
             if osd:
-                self.osd.volume_changed(percent, icon=icon, name=name)
+                self.osd.volume_changed(percent, icon=icon, name=osd_caption(profile, name))
         elif profile.mode == MODE_FOCUS:
             log.info("nothing to show for %s: %s", profile.id, result.reason)
         elif osd:
@@ -678,14 +704,15 @@ class Daemon(dbus.service.Object):
     def _appearance(
         self, profile: Profile, result: MatchResult, by_index: dict[int, Stream]
     ) -> tuple[str, str]:
-        """Caption and icon for the OSD, mirroring what plasmashell shows.
+        """Name and icon a profile resolves to, as the OSD and ``appvol list`` see it.
 
-        The Active profile keeps the original behaviour: the icon comes from the
-        focused window (its ``desktopFileName``), the caption from the stream,
-        because a stream usually carries a nicer ``application.name`` than the
-        reverse-DNS identifier of the window.  A descendant match may point at a
-        helper process (``ffmpeg``, a crash handler), and then the name of the
-        window itself is the useful one.
+        The icon of the Active profile comes from the focused window (its
+        ``desktopFileName``), the name from the stream, because a stream usually
+        carries a nicer ``application.name`` than the reverse-DNS identifier of
+        the window.  A descendant match may point at a helper process
+        (``ffmpeg``, a crash handler), and then the name of the window itself is
+        the useful one.  Whether the OSD also *shows* the name is up to
+        ``osd_name`` and decided in :func:`osd_caption`.
 
         A stream profile carries its own name, and its icon comes from the
         ``icon`` key, from the matched stream or from the ``.desktop`` file of
@@ -795,7 +822,7 @@ class Daemon(dbus.service.Object):
             name, icon = self._appearance(profile, result, by_index)
             payload["osd"] = {"name": name, "icon": icon}
             log.debug("osd: %s%% with icon %r (app %r)", payload["percent"], icon, name)
-            self.osd.volume_changed(payload["percent"], icon=icon, name=name)
+            self.osd.volume_changed(payload["percent"], icon=icon, name=osd_caption(profile, name))
         return payload
 
     def _toggle_mute(self, profile: Profile | None = None) -> dict:
@@ -844,7 +871,8 @@ class Daemon(dbus.service.Object):
         log.info("%s %s (streams: %s)", "muted" if mute else "unmuted", labels, result.indices)
         name, icon = self._appearance(profile, result, by_index)
         payload["osd"] = {"name": name, "icon": icon}
-        if profile.mode != MODE_FOCUS:
+        name = osd_caption(profile, name)
+        if name:
             if mute:
                 # Plasma renders "<name> Muted" itself when the value is zero.
                 self.osd.volume_changed(0, icon=icon, name=name)
@@ -1067,6 +1095,18 @@ def _percent_tuple(channels) -> list[int]:
     return [int(round(value * 100)) for value in channels]
 
 
+def osd_caption(profile: Profile, name: str) -> str:
+    """The caption the OSD receives: empty when the profile hides its name.
+
+    The Active profile defaults to ``osd_name = auto``, which stands for "a
+    caption for a stream profile, only the icon for the focus profile", so a
+    volume key on the focused window shows the icon and the bar and no name.  The
+    name a profile resolves to still travels in the reply, ``appvol list`` prints
+    it, and ``osd_name = always`` puts it back into the OSD.
+    """
+    return name if profile.shows_name else ""
+
+
 def _direction(value: object) -> str:
     text = str(value)
     if text not in (UP, DOWN):
@@ -1128,6 +1168,16 @@ class Appvol:
         self._keepalive_id = 0
         self._profile_check_id = 0
 
+    def on_shortcut_server_changed(self, _name, _old_owner, new_owner) -> None:
+        if not new_owner:
+            return
+        # KWin owns org.kde.kglobalaccel.  A restart (or a crash and a D-Bus
+        # activation) leaves a registry without our component, and the profile
+        # keys stay dead until they are registered again; the KGlobalAccel client
+        # library re-registers for the same reason (serviceOwnerChanged).
+        log.info("the global shortcut server appeared, registering the profile keys again")
+        self.daemon.resync_shortcuts()
+
     def start(self) -> None:
         self.bus.add_signal_receiver(
             self.kwin.on_name_owner_changed,
@@ -1135,6 +1185,14 @@ class Appvol:
             dbus_interface="org.freedesktop.DBus",
             bus_name="org.freedesktop.DBus",
             path="/org/freedesktop/DBus",
+        )
+        self.bus.add_signal_receiver(
+            self.on_shortcut_server_changed,
+            signal_name="NameOwnerChanged",
+            dbus_interface="org.freedesktop.DBus",
+            bus_name="org.freedesktop.DBus",
+            path="/org/freedesktop/DBus",
+            arg0=KGA_SERVICE,
         )
         self.kwin.schedule_load()
         self.pulse.keepalive()
@@ -1188,7 +1246,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose or os.environ.get("APPVOL_VERBOSE") else logging.INFO,
-        format="%(levelname)s %(name)s: %(message)s",
+        # The daemon runs for days, so the log needs its own clock: it is read to
+        # answer "did that key press arrive at all".
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
         stream=sys.stderr,
     )
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)

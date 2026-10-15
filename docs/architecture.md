@@ -151,10 +151,11 @@ step = 2
 
 One action per profile is registered in KGlobalAccel at run time, in the component
 `appvol` (friendly name "appvol profiles"), which keeps the keys the user assigns
-in System Settings in `kglobalshortcutsrc` across daemon restarts. The three volume
-actions stay where they were, in a service component built from
-`desktop/org.appvol.desktop.in`. [plasma-notes.md](plasma-notes.md) records what
-was verified about both mechanisms.
+in System Settings in `kglobalshortcutsrc` across daemon restarts. Every
+registration then marks the action *present*, because the shortcut server only
+grabs the keys of a present action; [plasma-notes.md](plasma-notes.md) records the
+mechanism. The three volume actions stay where they were, in a service component
+built from `desktop/org.appvol.desktop.in`.
 
 ## GUI
 

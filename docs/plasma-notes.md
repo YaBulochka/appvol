@@ -103,6 +103,20 @@ one, and the code follows what the system actually does.
   (the first is `key | modifiers`, the three others zero, so `Ctrl+Alt+Shift+F9`
   is `0x0F000038` and `Meta+Alt+S` reads back as `402653267`). `dbus-python`
   wants that structure spelled out on write and hides it on read.
+* A key is only grabbed for a *present* shortcut, and `doRegister` alone does not
+  make one. The registry builds every `GlobalShortcut` with `isPresent = false`
+  and `isFresh = true`, and `setActive()` — the call that hands the keys to the
+  compositor (`registerKey`) — returns right away while `isPresent` is false. So
+  a bare `doRegister` leaves an action whose key sits in `kglobalshortcutsrc`,
+  which System Settings shows and `Component.invokeShortcut` triggers, while a
+  real key press reaches nobody. The flag is
+  `KGlobalAccelD::SetShortcutFlag::SetPresent` (`2`, private to the server, the
+  client library passes it itself): an application claims its actions with
+  `setShortcutKeys(actionId, keys, SetPresent)`. With autoloading, which is the
+  default (no `NoAutoloading`), that call keeps the keys from the config and only
+  marks them present, so it is safe to repeat. appvol calls it for every profile
+  action right after `doRegister`, and again whenever the shortcut server
+  reappears on the bus.
 * A key assigned to a component lands in `kglobalshortcutsrc` under a section
   named after it (`[appvol]`, exactly like `[kmix]`) and is restored when the
   component registers again, so the bindings survive a restart of the daemon.

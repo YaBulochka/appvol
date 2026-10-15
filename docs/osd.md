@@ -17,23 +17,28 @@ the stock KDE OSD.
   `signature="i"`.
 * `showText(icon, text)` draws an icon with a caption, and is what `mute` uses.
 
-appvol prefers the first method whenever the icon is known. For the Active window
-profile the `name` argument is sent empty, because the icon alone looked better
-than an icon with a caption; a stream profile sends its own name, so the OSD reads
-"Spotify" with the volume bar and "Spotify Muted" at zero percent. The name of the
-Active profile is still computed, `appvol list` prints it for diagnostics, and a
-future GUI setting can show it. When no icon is known, the OSD falls back to
-`volumeChanged(percent)` so the user still gets feedback:
+appvol prefers the first method whenever the icon is known. Whether the `name`
+argument is filled in is per profile and comes from `osd_name`: `auto`, the
+default, captions a stream profile and leaves the Active profile with the icon
+alone; `always` captions both; `never` captions neither. A stream profile reads
+"Spotify" with the volume bar and "Spotify Muted" at zero percent, while a volume
+key on the focused window shows that window's icon and the bar and no name. The
+name of the Active profile is still computed, `appvol list` prints it for
+diagnostics, and the reply keeps it for a client that wants to show it. When no
+icon is known, the OSD falls back to `volumeChanged(percent)` so the user still
+gets feedback:
 
 ```
 match:  step=pid matched=1 (streams owned by pid 155358)
 osd:    icon='spotify' (app 'Spotify')
 ```
 
-`mute` shows the icon with the caption `Muted`, `unmute` shows the icon with the
-volume bar (or `Unmuted` when the volume is zero). A profile that matches nothing
-answers `no stream` instead of staying silent, because a profile key press is an
-explicit action on a target the user chose.
+`mute` on a profile with a caption uses the media player form with a value of zero,
+which Plasma renders as `<name> Muted`; a profile without one gets
+`showText(icon, "Muted")` instead. `unmute` shows the volume bar, or `Unmuted`
+through `showText` when the volume is zero and the bar would stay empty. A profile
+that matches nothing answers `no stream` instead of staying silent, because a
+profile key press is an explicit action on a target the user chose.
 
 A profile has three icon sources, in this order: its own `icon` key, when the
 theme can render it; the matched stream, through the same chain as below; and the
