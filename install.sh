@@ -183,10 +183,9 @@ sed "s|@APPVOLD@|$install_dir/bin/appvold|" "$root/systemd/appvold.service.in" >
 echo "appvol: systemd user unit installed as $unit"
 
 if want_gui; then
-    install -d "$(dirname "$gui_entry")" "$(dirname "$gui_icon")"
+    install -d "$(dirname "$gui_entry")"
     sed "s|@APPVOL_GUI@|$install_dir/bin/appvol-gui|g" \
         "$root/desktop/org.appvol.gui.desktop.in" >"$gui_entry"
-    install -m644 "$root/desktop/appvol.svg" "$gui_icon"
     echo "appvol: window and tray icon installed (appvol-gui)"
 elif [ "$with_gui" = auto ]; then
     echo "appvol: note: PySide6 is missing, so the window and the tray icon were skipped"

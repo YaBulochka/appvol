@@ -92,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add.add_argument("--icon", default="", help="icon name override")
     add.add_argument(
-        "--osd-name", default="auto", choices=OSD_NAMES, help="when the OSD captions the name"
+        "--osd-name", default="never", choices=OSD_NAMES, help="when the OSD captions the name"
     )
     remove = actions.add_parser("rm", help="remove a profile and its key binding")
     remove.add_argument("id")

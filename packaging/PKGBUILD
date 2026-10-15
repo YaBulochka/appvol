@@ -5,7 +5,7 @@
 # hundred megabytes.  Splitting them keeps a headless or minimal install small.
 pkgbase=appvol
 pkgname=('appvol' 'appvol-gui')
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 arch=('any')
 url="https://github.com/YaBulochka/appvol"
@@ -90,11 +90,6 @@ package_appvol-gui() {
     install -d "$pkgdir/usr/share/applications"
     sed 's|@APPVOL_GUI@|/usr/bin/appvol-gui|g' desktop/org.appvol.gui.desktop.in \
         >"$pkgdir/usr/share/applications/org.appvol.gui.desktop"
-
-    # The name of the icon equals the application id, so the launcher entry, the
-    # window and the tray icon all find the same file.
-    install -Dm644 desktop/appvol.svg \
-        "$pkgdir/usr/share/icons/hicolor/scalable/apps/appvol.svg"
 
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

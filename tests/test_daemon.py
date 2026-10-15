@@ -314,8 +314,14 @@ class OsdCaptionTest(unittest.TestCase):
         self.assertEqual(daemon.osd_caption(active_profile(), "Firefox"), "")
 
     def test_a_stream_profile_shows_its_name(self) -> None:
-        profile = Profile(id="spotify", name="Spotify")
+        profile = Profile(id="spotify", name="Spotify", osd_name=OSD_NAME_ALWAYS)
         self.assertEqual(daemon.osd_caption(profile, "Spotify"), "Spotify")
+
+    def test_a_stream_profile_hides_its_name_by_default(self) -> None:
+        # New profiles default to ``osd_name = never``: the OSD shows the icon
+        # alone, and the name travels in the reply instead.
+        profile = Profile(id="spotify", name="Spotify")
+        self.assertEqual(daemon.osd_caption(profile, "Spotify"), "")
 
     def test_always_puts_the_name_back_on_a_focus_profile(self) -> None:
         profile = Profile(id="focus", mode=MODE_FOCUS, osd_name=OSD_NAME_ALWAYS)
@@ -335,6 +341,7 @@ class StepDaemon(daemon.Daemon):
         self.profiles_path = base / "profiles.toml"
         self.config_path = base / "config.toml"
         self.state = daemon.State()
+        self._last_active: tuple[str, str, int] | None = None
 
 
 class SetStepTest(unittest.TestCase):

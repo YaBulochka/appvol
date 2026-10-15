@@ -122,7 +122,7 @@ class Client:
         step: float = 0.0,
         max_volume: float = 0.0,
         icon: str = "",
-        osd_name: str = "auto",
+        osd_name: str = "never",
     ) -> dict:
         """Create or replace a profile."""
         return self.call(

@@ -36,7 +36,7 @@ Kirigami.OverlaySheet {
             draftStep = existing.step || 0
             draftMax = existing.max_volume || bridge.config.max_volume || 100
             draftIcon = existing.icon || ""
-            draftOsd = existing.osd_name || "auto"
+            draftOsd = existing.osd_name || "never"
         } else {
             draftId = ""
             draftName = ""
@@ -45,7 +45,7 @@ Kirigami.OverlaySheet {
             draftStep = bridge.config.step || 5
             draftMax = bridge.config.max_volume || 100
             draftIcon = ""
-            draftOsd = "auto"
+            draftOsd = "never"
         }
         osdBox.currentIndex = Math.max(0, osdNames.indexOf(draftOsd))
         open()

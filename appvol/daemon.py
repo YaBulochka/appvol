@@ -433,6 +433,9 @@ class Daemon(dbus.service.Object):
         self.profiles_path = Path(profiles_path) if profiles_path else default_profiles_path()
         self.config_path = Path(config_path) if config_path else default_config_path()
         self.shortcuts = ShortcutActions(bus, self.on_shortcut)
+        # The last application the Active profile covered: when the cycle keys
+        # land on Active, the OSD shows it instead of nothing.
+        self._last_active: tuple[str, str, int] | None = None
 
     # -- profiles ----------------------------------------------------------
 
@@ -526,7 +529,14 @@ class Daemon(dbus.service.Object):
         target = order[(index + step) % len(order)]
         self.state.selection.select(target, time.monotonic())
         log.info("profile: %s", self.state.selection.current)
-        self._feedback(self.current_profile(), osd=True)
+        profile = self.current_profile()
+        if target == ACTIVE_ID and self._last_active is not None:
+            # Landed on Active: show the last application Active covered.
+            name, icon, percent = self._last_active
+            log.info("cycle on active: last app %r, icon %r, %s%%", name, icon, percent)
+            self.osd.volume_changed(percent, icon=icon, name=name)
+            return
+        self._feedback(profile, osd=True)
 
     def _switch_target(self, profile_id: str) -> Profile:
         """The profile a switch refers to; an empty id means the built-in one."""
@@ -560,6 +570,8 @@ class Daemon(dbus.service.Object):
         if targets:
             percent = int(round(max(peak(stream.volume) for stream in targets) * 100))
             payload["percent"] = percent
+            if profile.mode == MODE_FOCUS:
+                self._last_active = (name, icon, percent)
             if osd:
                 self.osd.volume_changed(percent, icon=icon, name=osd_caption(profile, name))
         elif profile.mode == MODE_FOCUS:
@@ -907,6 +919,8 @@ class Daemon(dbus.service.Object):
             name, icon = self._appearance(profile, result, by_index)
             payload["osd"] = {"name": name, "icon": icon}
             log.debug("osd: %s%% with icon %r (app %r)", payload["percent"], icon, name)
+            if profile.mode == MODE_FOCUS:
+                self._last_active = (name, icon, payload["percent"] or 0)
             self.osd.volume_changed(payload["percent"], icon=icon, name=osd_caption(profile, name))
         return payload
 
@@ -1227,7 +1241,7 @@ def _osd_name(value: object) -> str:
         return OSD_NAME_AUTO
     if text not in OSD_NAMES:
         log.warning("profile: osd_name %r is not one of %s, using %r",
-                    value, ", ".join(OSD_NAMES), OSD_NAME_AUTO)
+                    value, ", ".join(OSD_NAMES), OSD_NAME_NEVER)
         return OSD_NAME_AUTO
     return text
 

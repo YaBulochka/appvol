@@ -18,9 +18,9 @@ the stock KDE OSD.
 * `showText(icon, text)` draws an icon with a caption, and is what `mute` uses.
 
 appvol prefers the first method whenever the icon is known. Whether the `name`
-argument is filled in is per profile and comes from `osd_name`: `auto`, the
-default, captions a stream profile and leaves the Active profile with the icon
-alone; `always` captions both; `never` captions neither. A stream profile reads
+argument is filled in is per profile and comes from `osd_name`: `never`, the
+default, captions neither; `auto` captions a stream profile and leaves the Active
+profile with the icon alone, and `always` captions both. A stream profile reads
 "Spotify" with the volume bar and "Spotify Muted" at zero percent, while a volume
 key on the focused window shows that window's icon and the bar and no name. The
 name of the Active profile is still computed, `appvol list` prints it for

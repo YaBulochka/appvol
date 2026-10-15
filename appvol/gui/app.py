@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 QML_DIR = Path(__file__).resolve().parent / "qml"
 QML_ENTRY = QML_DIR / "Main.qml"
 
-APP_ICON = "appvol"
+APP_ICON = "audio-speakers"
 FALLBACK_ICON = "audio-volume-high"
 
 # Qt Quick Controls picks the Breeze styled controls of the desktop; without the

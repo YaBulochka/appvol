@@ -76,7 +76,8 @@ stays empty instead of pretending.
 * **Step** and **Maximum volume** are per profile; a step of 0 follows
   `config.toml`, which is the value the Active row of the list edits.
 * **Icon** overrides the icon of the OSD and of the row, and **OSD name** decides
-  whether the profile name appears there.
+  whether the profile name appears there; new profiles default to `never`, so the
+  OSD shows the icon alone unless the user picks `auto` or `always`.
 
 The editor writes the profile in one call when **Save** is pressed, so the file
 never holds half an edit, and the daemon writes it atomically.

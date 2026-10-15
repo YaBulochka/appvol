@@ -86,7 +86,7 @@ class Profile:
     step: float | None = None
     max_volume: float | None = None
     icon: str = ""
-    osd_name: str = OSD_NAME_AUTO
+    osd_name: str = OSD_NAME_NEVER
 
     @property
     def display_name(self) -> str:

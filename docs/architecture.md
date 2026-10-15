@@ -131,8 +131,9 @@ notification sounds, matched by the same name variants as a window. An explicit
 `include` still reaches them, so nothing is unreachable.
 
 `step`, `max_volume`, `icon` and `osd_name` are per profile; an unset value falls
-back to `config.toml`. `osd_name` is `auto` (the name for stream profiles, only
-the icon for the Active one), `always` or `never`.
+back to `config.toml`. A new profile defaults to `osd_name = never`, so the OSD
+shows the icon alone; `auto` captions a stream profile and leaves the Active one
+with the icon alone, `always` captions both, and `never` captions neither.
 
 Switching is a toggle: a profile key switches to that profile, the same key
 switches back to Active, another profile key switches over. The three volume keys

@@ -11,6 +11,7 @@ from appvol.profiles import (
     ACTIVE_ID,
     MODE_FOCUS,
     OSD_NAME_AUTO,
+    OSD_NAME_ALWAYS,
     OSD_NAME_NEVER,
     STEP_PROFILE,
     Profile,
@@ -64,9 +65,9 @@ class ActiveProfileTests(unittest.TestCase):
         self.assertEqual(profile.mode, MODE_FOCUS)
         self.assertFalse(profile.shows_name)
 
-    def test_stream_profiles_show_their_name_by_default(self) -> None:
-        self.assertTrue(Profile(id="spotify").shows_name)
-        self.assertFalse(Profile(id="spotify", osd_name=OSD_NAME_NEVER).shows_name)
+    def test_stream_profiles_hide_their_name_by_default(self) -> None:
+        self.assertFalse(Profile(id="spotify").shows_name)
+        self.assertTrue(Profile(id="spotify", osd_name=OSD_NAME_ALWAYS).shows_name)
 
     def test_display_name_falls_back_to_the_id(self) -> None:
         self.assertEqual(Profile(id="spotify").display_name, "spotify")
