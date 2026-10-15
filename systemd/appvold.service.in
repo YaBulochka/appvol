@@ -8,8 +8,8 @@ After=graphical-session.target
 Type=simple
 # Absolute path to the daemon: systemd does not read the user's PATH, and the
 # path differs between a checkout, install.sh and the pacman package.
-# install.sh and bin/appvol-release substitute @APPVOLD@ when they install the
-# unit; see README.md ("Запуск").
+# install.sh and the PKGBUILD substitute @APPVOLD@ when they install the unit;
+# see docs/development.md.
 ExecStart=@APPVOLD@
 # Without this, stdout/stderr are block-buffered when journald captures them and
 # the log arrives in bursts.

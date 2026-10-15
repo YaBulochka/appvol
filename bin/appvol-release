@@ -65,6 +65,8 @@ for required in \
     "appvol-$version/systemd/appvold.service.in" \
     "appvol-$version/install.sh" \
     "appvol-$version/packaging/PKGBUILD" \
+    "appvol-$version/README.md" \
+    "appvol-$version/docs/architecture.md" \
     "appvol-$version/LICENSE"; do
     if ! tar tzf "dist/$archive" "$required" >/dev/null 2>&1; then
         echo "appvol-release: $required is missing from the archive" >&2
@@ -94,7 +96,7 @@ if [ "$with_package" = yes ]; then
         echo "appvol-release: --package needs makepkg (pacman-contrib)" >&2
         exit 1
     fi
-    ( cd packaging && makepkg --force --cleanbuild --noconfirm )
+    ( cd packaging && makepkg --force --cleanbuild --clean --noconfirm )
     package="$(find packaging -maxdepth 1 -name "appvol-$version-*.pkg.tar.*" -printf '%f\n' | head -1)"
     cp "packaging/$package" dist/
     built="        dist/$package"
