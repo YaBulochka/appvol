@@ -79,8 +79,13 @@ Kirigami.ApplicationWindow {
                 }
 
                 Controls.Switch {
-                    checked: bridge.osdShowName
+                    id: osdSwitch
+                    checked: false
                     onToggled: bridge.setOsdShowName(checked)
+                    Connections {
+                        target: bridge
+                        onConfigChanged: osdSwitch.checked = bridge.osdShowName
+                    }
                 }
             }
 
