@@ -99,12 +99,13 @@ The profiles live in `~/.config/appvol/profiles.toml`, written by the daemon.
 The daemon registers one action per profile in KGlobalAccel, so every profile
 shows up in System Settings → Shortcuts under **Appvol** while the daemon runs,
 next to the five fixed actions. Bind a key per profile there. While a profile is
-current, the volume keys follow it; the OSD captions the profile name, while a
-volume key on the focused window shows that window's icon alone. **Next profile**
-and **Previous profile** walk through the built-in Active profile and the profiles
-in the order the window lists them, so a key press away from the last one lands on
-Active again. Five minutes without a press on the profile return the keys to the
-Active profile.
+current, the volume keys follow it; the OSD shows the icon
+and the bar, and can also caption the application name — switch on
+**“Show app name in OSD”** in the window, one checkbox for every profile.
+**Next profile** and **Previous profile** walk through the built-in Active
+profile and the profiles in the order the window lists them, so a key press
+away from the last one lands on Active again. Five minutes without a press on
+the profile return the keys to the Active profile.
 
 ## Window and tray icon
 

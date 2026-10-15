@@ -16,7 +16,6 @@ import sys
 import dbus
 
 from . import __version__
-from .profiles import OSD_NAMES
 
 log = logging.getLogger("appvol.cli")
 
@@ -91,9 +90,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-volume", type=float, default=0.0, metavar="PERCENT", help="volume ceiling in percent"
     )
     add.add_argument("--icon", default="", help="icon name override")
-    add.add_argument(
-        "--osd-name", default="never", choices=OSD_NAMES, help="when the OSD captions the name"
-    )
     remove = actions.add_parser("rm", help="remove a profile and its key binding")
     remove.add_argument("id")
     toggle = actions.add_parser("toggle", help="switch to a profile, or back to Active")
@@ -230,7 +226,6 @@ def _profile(proxy, args) -> tuple[dict, str]:
             dbus.Double(float(args.step or 0.0)),
             dbus.Double(float(args.max_volume or 0.0)),
             args.icon,
-            args.osd_name,
         )
         return json.loads(payload), "profiles"
     if args.profile_command == "rm":

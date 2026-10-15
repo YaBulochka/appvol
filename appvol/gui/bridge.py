@@ -78,6 +78,11 @@ class Bridge(QObject):
         """Global defaults the profiles fall back to."""
         return self._config
 
+    @Property(bool, notify=configChanged)
+    def osdShowName(self) -> bool:
+        """Whether the OSD captions the application name; one checkbox for all profiles."""
+        return bool(self._config.get("osd_show_name", False))
+
     @Property(str, notify=errorChanged)
     def error(self) -> str:
         """The last failure, empty while everything works."""
@@ -135,7 +140,12 @@ class Bridge(QObject):
         """
         self._write(self.client.set_step, str(profile_id), float(percent))
 
-    @Slot(str, str, "QVariantList", "QVariantList", float, float, str, str)
+    @Slot(bool)
+    def setOsdShowName(self, show: bool) -> None:
+        """Show or hide the application name in the OSD, from the window checkbox."""
+        self._write(self.client.set_osd_show_name, bool(show))
+
+    @Slot(str, str, "QVariantList", "QVariantList", float, float, str)
     def saveProfile(
         self,
         profile_id: str,
@@ -145,7 +155,6 @@ class Bridge(QObject):
         step: float,
         max_volume: float,
         icon: str,
-        osd_name: str,
     ) -> None:
         """Create or replace a profile, from the editor."""
         self._write(
@@ -157,7 +166,6 @@ class Bridge(QObject):
             float(step),
             float(max_volume),
             str(icon),
-            str(osd_name),
         )
 
     @Slot(str)

@@ -10,9 +10,7 @@ from appvol.match import Stream
 from appvol.profiles import (
     ACTIVE_ID,
     MODE_FOCUS,
-    OSD_NAME_AUTO,
-    OSD_NAME_ALWAYS,
-    OSD_NAME_NEVER,
+    MODE_STREAMS,
     STEP_PROFILE,
     Profile,
     ProfileSelection,
@@ -59,15 +57,13 @@ class IdTests(unittest.TestCase):
 
 
 class ActiveProfileTests(unittest.TestCase):
-    def test_active_profile_follows_the_focus_and_hides_the_name(self) -> None:
+    def test_active_profile_follows_the_focus(self) -> None:
         profile = active_profile()
         self.assertEqual(profile.id, ACTIVE_ID)
         self.assertEqual(profile.mode, MODE_FOCUS)
-        self.assertFalse(profile.shows_name)
 
-    def test_stream_profiles_hide_their_name_by_default(self) -> None:
-        self.assertFalse(Profile(id="spotify").shows_name)
-        self.assertTrue(Profile(id="spotify", osd_name=OSD_NAME_ALWAYS).shows_name)
+    def test_stream_profiles_are_streams_mode(self) -> None:
+        self.assertEqual(Profile(id="spotify").mode, MODE_STREAMS)
 
     def test_display_name_falls_back_to_the_id(self) -> None:
         self.assertEqual(Profile(id="spotify").display_name, "spotify")
@@ -107,7 +103,6 @@ exclude = ["discord"]
 step = 2.5
 max_volume = 120
 icon = "input-gaming"
-osd_name = "always"
 """
         profile = parse(text)[0]
         self.assertEqual(profile.name, "Counter-Strike")
@@ -116,7 +111,6 @@ osd_name = "always"
         self.assertEqual(profile.step, 2.5)
         self.assertEqual(profile.max_volume, 120.0)
         self.assertEqual(profile.icon, "input-gaming")
-        self.assertTrue(profile.shows_name)
 
     def test_a_single_table_is_accepted(self) -> None:
         self.assertEqual(len(parse('[profile]\nid = "spotify"\n')), 1)
@@ -137,10 +131,9 @@ osd_name = "always"
         self.assertEqual(len(profiles), 1)
         self.assertEqual(profiles[0].name, "first")
 
-    def test_unknown_choices_fall_back(self) -> None:
-        profile = parse('[[profile]]\nid = "x"\nmode = "magic"\nosd_name = "maybe"\n')[0]
-        self.assertEqual(profile.mode, "streams")
-        self.assertEqual(profile.osd_name, OSD_NAME_AUTO)
+    def test_unknown_profile_keys_are_ignored(self) -> None:
+        profile = parse('[[profile]]\nid = "x"\nosd_name = "always"\n')[0]
+        self.assertEqual(profile.id, "x")
 
     def test_unusable_numbers_are_dropped(self) -> None:
         profile = parse('[[profile]]\nid = "x"\nstep = -1\nmax_volume = "loud"\n')[0]
@@ -164,7 +157,7 @@ class DumpTests(unittest.TestCase):
     def test_round_trip(self) -> None:
         profiles = [
             Profile(id="spotify", name='Spot "ify"', include=("spotify",), step=2.0),
-            Profile(id="cs2", include=(), exclude=("discord",), osd_name=OSD_NAME_NEVER),
+            Profile(id="cs2", include=(), exclude=("discord",)),
         ]
         self.assertEqual(parse(dumps(profiles)), profiles)
 

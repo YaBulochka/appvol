@@ -24,7 +24,6 @@ Kirigami.OverlaySheet {
     property string target: "include"
 
     readonly property bool creating: profile === null
-    readonly property var osdNames: ["auto", "always", "never"]
 
     function openFor(existing) {
         profile = existing
@@ -36,7 +35,6 @@ Kirigami.OverlaySheet {
             draftStep = existing.step || 0
             draftMax = existing.max_volume || bridge.config.max_volume || 100
             draftIcon = existing.icon || ""
-            draftOsd = existing.osd_name || "never"
         } else {
             draftId = ""
             draftName = ""
@@ -45,9 +43,7 @@ Kirigami.OverlaySheet {
             draftStep = bridge.config.step || 5
             draftMax = bridge.config.max_volume || 100
             draftIcon = ""
-            draftOsd = "never"
         }
-        osdBox.currentIndex = Math.max(0, osdNames.indexOf(draftOsd))
         open()
     }
 
@@ -72,8 +68,7 @@ Kirigami.OverlaySheet {
             excludeList,
             draftStep,
             draftMax,
-            draftIcon.trim(),
-            draftOsd)
+            draftIcon.trim())
         close()
     }
 
@@ -247,26 +242,18 @@ Kirigami.OverlaySheet {
                 }
             }
 
-            Controls.ComboBox {
-                id: osdBox
-                Kirigami.FormData.label: "OSD name:"
-                model: sheet.osdNames
-                onActivated: sheet.draftOsd = currentText
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                opacity: 0.7
+                font: Kirigami.Theme.smallFont
+                text: "Step 0 follows the global step of config.toml."
             }
         }
-
-        Controls.Label {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            opacity: 0.7
-            font: Kirigami.Theme.smallFont
-            text: "Step 0 follows the global step of config.toml. “auto” writes the profile name into "
-                + "the OSD only while the profile is not the Active one."
-        }
-    }
 
     ApplicationPicker {
         id: picker
         onChosen: (identifier) => sheet.addApplication(identifier)
     }
+}
 }

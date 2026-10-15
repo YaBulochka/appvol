@@ -504,6 +504,7 @@ class Daemon(dbus.service.Object):
                 "step": self.config.step,
                 "max_volume": self.config.max_volume,
                 "osd": self.config.osd,
+                "osd_show_name": self.config.osd_show_name,
             },
             "profiles": [profile.summary() for profile in self.profiles],
         }
@@ -531,10 +532,11 @@ class Daemon(dbus.service.Object):
         log.info("profile: %s", self.state.selection.current)
         profile = self.current_profile()
         if target == ACTIVE_ID and self._last_active is not None:
-            # Landed on Active: show the last application Active covered.
-            name, icon, percent = self._last_active
-            log.info("cycle on active: last app %r, icon %r, %s%%", name, icon, percent)
-            self.osd.volume_changed(percent, icon=icon, name=name)
+            # Landed on Active: show the last volume of the focused window, but
+            # never its name — Active covers every stream of that window.
+            _, icon, percent = self._last_active
+            log.info("cycle on active: icon %r, %s%%", icon, percent)
+            self.osd.volume_changed(percent, icon=icon, name="")
             return
         self._feedback(profile, osd=True)
 
@@ -573,7 +575,7 @@ class Daemon(dbus.service.Object):
             if profile.mode == MODE_FOCUS:
                 self._last_active = (name, icon, percent)
             if osd:
-                self.osd.volume_changed(percent, icon=icon, name=osd_caption(profile, name))
+                self.osd.volume_changed(percent, icon=icon, name=osd_caption(self.config.osd_show_name, name))
         elif profile.mode == MODE_FOCUS:
             log.info("nothing to show for %s: %s", profile.id, result.reason)
         elif osd:
@@ -590,7 +592,6 @@ class Daemon(dbus.service.Object):
         step,
         max_volume,
         icon,
-        osd_name,
     ) -> dict:
         try:
             identifier = validate_id(profile_id)
@@ -605,7 +606,6 @@ class Daemon(dbus.service.Object):
             step=float(step) or None,
             max_volume=float(max_volume) or None,
             icon=str(icon).strip(),
-            osd_name=_osd_name(osd_name),
         )
         known = find_profile(self.profiles, identifier) is not None
         if known:
@@ -656,6 +656,13 @@ class Daemon(dbus.service.Object):
         self.profiles = replace_step(self.profiles, identifier, step)
         save_profiles(self.profiles, self.profiles_path)
         log.info("profile %s: step %s", identifier, f"{step:g}%" if step else "the global one")
+        return self._profiles()
+
+    def _set_osd_show_name(self, show: bool) -> dict:
+        """Store whether the OSD captions the application name."""
+        self.config = replace(self.config, osd_show_name=show)
+        save_config(self.config, self.config_path)
+        log.info("osd show name: %s", show)
         return self._profiles()
 
     # -- D-Bus API ---------------------------------------------------------
@@ -718,6 +725,15 @@ class Daemon(dbus.service.Object):
         """
         return json.dumps(self._set_step(str(profile_id), _step(step)))
 
+    @dbus.service.method(IFACE, in_signature="b", out_signature="s")
+    def SetOsdShowName(self, show) -> str:  # noqa: N802
+        """Show or hide the application name in the OSD, for every profile.
+
+        The window keeps one checkbox for this; the value is written to
+        ``config.toml`` so it survives a restart.
+        """
+        return json.dumps(self._set_osd_show_name(bool(show)))
+
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def Applications(self) -> str:  # noqa: N802
         """Report the applications that are playing right now."""
@@ -761,13 +777,13 @@ class Daemon(dbus.service.Object):
         self.load_profiles()
         return json.dumps(self._profiles())
 
-    @dbus.service.method(IFACE, in_signature="ssasasddss", out_signature="s")
+    @dbus.service.method(IFACE, in_signature="ssasasdds", out_signature="s")
     def AddProfile(  # noqa: N802
-        self, profile_id, name, include, exclude, step, max_volume, icon, osd_name
+        self, profile_id, name, include, exclude, step, max_volume, icon
     ) -> str:
         """Create or replace a stream profile and write ``profiles.toml``."""
         return json.dumps(
-            self._add_profile(profile_id, name, include, exclude, step, max_volume, icon, osd_name)
+            self._add_profile(profile_id, name, include, exclude, step, max_volume, icon)
         )
 
     @dbus.service.method(IFACE, in_signature="s", out_signature="s")
@@ -816,7 +832,7 @@ class Daemon(dbus.service.Object):
         the first entry of ``include``.
         """
         if profile.mode != MODE_FOCUS:
-            name = profile.display_name if profile.shows_name else ""
+            name = profile.display_name if self.config.osd_show_name else ""
             return name, self._profile_icon(profile, result, by_index)
 
         focus = self.state.focus
@@ -921,7 +937,7 @@ class Daemon(dbus.service.Object):
             log.debug("osd: %s%% with icon %r (app %r)", payload["percent"], icon, name)
             if profile.mode == MODE_FOCUS:
                 self._last_active = (name, icon, payload["percent"] or 0)
-            self.osd.volume_changed(payload["percent"], icon=icon, name=osd_caption(profile, name))
+            self.osd.volume_changed(payload["percent"], icon=icon, name=osd_caption(self.config.osd_show_name, name))
         return payload
 
     def _toggle_mute(self, profile: Profile | None = None) -> dict:
@@ -970,7 +986,7 @@ class Daemon(dbus.service.Object):
         log.info("%s %s (streams: %s)", "muted" if mute else "unmuted", labels, result.indices)
         name, icon = self._appearance(profile, result, by_index)
         payload["osd"] = {"name": name, "icon": icon}
-        name = osd_caption(profile, name)
+        name = osd_caption(self.config.osd_show_name, name)
         if name:
             if mute:
                 # Plasma renders "<name> Muted" itself when the value is zero.
@@ -1097,12 +1113,7 @@ class Daemon(dbus.service.Object):
         return {"ok": True, "applications": entries, "current": self.state.selection.current}
 
     def _overview(self) -> dict:
-        """The panel the GUI draws: every profile with its live state.
-
-        The built-in Active profile comes first, because it is also a target the
-        user switches between.  A dead PipeWire connection is not fatal here: the
-        profiles are still worth showing, only the live numbers are missing.
-        """
+        """The panel the GUI draws: every profile with its live state."""
         try:
             streams: list[Stream] | None = self.pulse.streams()
         except RuntimeError as exc:
@@ -1194,16 +1205,14 @@ def _percent_tuple(channels) -> list[int]:
     return [int(round(value * 100)) for value in channels]
 
 
-def osd_caption(profile: Profile, name: str) -> str:
-    """The caption the OSD receives: empty when the profile hides its name.
+def osd_caption(show_name: bool, name: str) -> str:
+    """The caption the OSD receives: the name when the global checkbox allows it.
 
-    The Active profile defaults to ``osd_name = auto``, which stands for "a
-    caption for a stream profile, only the icon for the focus profile", so a
-    volume key on the focused window shows the icon and the bar and no name.  The
-    name a profile resolves to still travels in the reply, ``appvol list`` prints
-    it, and ``osd_name = always`` puts it back into the OSD.
+    The checkbox lives in the window and is shared by every profile: when it is
+    off the OSD shows the icon alone, which is what the Active profile (all
+    streams of the focused window) always shows, because it has no single name.
     """
-    return name if profile.shows_name else ""
+    return name if show_name else ""
 
 
 def _direction(value: object) -> str:
@@ -1233,17 +1242,6 @@ def _names(values: Iterable[object]) -> tuple[str, ...]:
     """Clean a list of application identifiers, keeping the order."""
     cleaned = (str(value).strip() for value in values)
     return tuple(dict.fromkeys(value for value in cleaned if value))
-
-
-def _osd_name(value: object) -> str:
-    text = str(value or "").strip().lower()
-    if not text:
-        return OSD_NAME_AUTO
-    if text not in OSD_NAMES:
-        log.warning("profile: osd_name %r is not one of %s, using %r",
-                    value, ", ".join(OSD_NAMES), OSD_NAME_NEVER)
-        return OSD_NAME_AUTO
-    return text
 
 
 def _invalid_argument(message: str) -> dbus.DBusException:

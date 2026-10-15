@@ -86,20 +86,10 @@ class Profile:
     step: float | None = None
     max_volume: float | None = None
     icon: str = ""
-    osd_name: str = OSD_NAME_NEVER
 
     @property
     def display_name(self) -> str:
         return self.name or self.id
-
-    @property
-    def shows_name(self) -> bool:
-        """Whether the OSD should caption the volume bar with the name."""
-        if self.osd_name == OSD_NAME_ALWAYS:
-            return True
-        if self.osd_name == OSD_NAME_NEVER:
-            return False
-        return self.mode != MODE_FOCUS
 
     def summary(self) -> dict:
         return {
@@ -111,7 +101,6 @@ class Profile:
             "step": self.step,
             "max_volume": self.max_volume,
             "icon": self.icon,
-            "osd_name": self.osd_name,
         }
 
 
@@ -296,7 +285,6 @@ def _parse_profile(entry: object, index: int) -> Profile | None:
         return None
 
     mode = _as_choice(entry.get("mode"), MODES, MODE_STREAMS, profile_id, "mode")
-    osd_name = _as_choice(entry.get("osd_name"), OSD_NAMES, OSD_NAME_AUTO, profile_id, "osd_name")
     name = entry.get("name")
     icon = entry.get("icon")
     return Profile(
@@ -308,7 +296,6 @@ def _parse_profile(entry: object, index: int) -> Profile | None:
         step=_as_optional_float(entry.get("step"), profile_id, "step"),
         max_volume=_as_optional_float(entry.get("max_volume"), profile_id, "max_volume"),
         icon=str(icon).strip() if isinstance(icon, str) else "",
-        osd_name=osd_name,
     )
 
 
@@ -389,8 +376,6 @@ def _dump_profile(profile: Profile) -> str:
         lines.append(f"max_volume = {profile.max_volume:g}")
     if profile.icon:
         lines.append(f"icon = {_quote(profile.icon)}")
-    if profile.osd_name != OSD_NAME_AUTO:
-        lines.append(f"osd_name = {_quote(profile.osd_name)}")
     return "\n".join(lines) + "\n"
 
 

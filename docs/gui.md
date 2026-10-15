@@ -75,9 +75,10 @@ stays empty instead of pretending.
   profile into "everything except this".
 * **Step** and **Maximum volume** are per profile; a step of 0 follows
   `config.toml`, which is the value the Active row of the list edits.
-* **Icon** overrides the icon of the OSD and of the row, and **OSD name** decides
-  whether the profile name appears there; new profiles default to `never`, so the
-  OSD shows the icon alone unless the user picks `auto` or `always`.
+* **Icon** overrides the icon of the OSD and of the row. Whether the OSD
+  captions the application name is decided by one checkbox in the window,
+  “Show app name in OSD”, shared by every profile — it is off by default, so
+  the OSD shows the icon alone.
 
 The editor writes the profile in one call when **Save** is pressed, so the file
 never holds half an edit, and the daemon writes it atomically.

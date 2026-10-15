@@ -205,13 +205,13 @@ class ClientTests(unittest.TestCase):
     def test_add_profile_sends_plain_lists(self) -> None:
         proxy = FakeProxy()
         client = Client(connect=lambda: proxy)
-        client.add_profile("cs2", "CS2", ["cs2", "steam"], ["discord"], 3, 120, "cs2", "always")
+        client.add_profile("cs2", "CS2", ["cs2", "steam"], ["discord"], 3, 120, "cs2")
         name, args = proxy.calls[0]
         self.assertEqual(name, "AddProfile")
         self.assertEqual(list(args[2]), ["cs2", "steam"])
         self.assertEqual(list(args[3]), ["discord"])
         self.assertAlmostEqual(float(args[4]), 3.0)
-        self.assertEqual(args[7], "always")
+        self.assertEqual(args[6], "cs2")
 
     def test_switch_profile_carries_the_osd_flag(self) -> None:
         proxy = FakeProxy()
@@ -335,7 +335,7 @@ class BridgeTests(unittest.TestCase):
 
     def test_saving_a_profile_passes_the_lists_through(self) -> None:
         bridge = self.make()
-        bridge.saveProfile("cs2", "CS2", ["cs2"], ["discord"], 3.0, 120.0, "cs2", "never")
+        bridge.saveProfile("cs2", "CS2", ["cs2"], ["discord"], 3.0, 120.0, "cs2")
         name, args = self.proxy.calls[0]
         self.assertEqual(name, "AddProfile")
         self.assertEqual(args[0], "cs2")
@@ -344,7 +344,7 @@ class BridgeTests(unittest.TestCase):
     def test_a_failed_write_reports_and_keeps_the_panel(self) -> None:
         proxy = FakeProxy({"Overview": OVERVIEW, "Applications": APPLICATIONS}, missing_service())
         bridge = Bridge(Client(connect=lambda: proxy), FakeKeys())
-        bridge.saveProfile("cs2", "CS2", [], [], 0.0, 0.0, "", "auto")
+        bridge.saveProfile("cs2", "CS2", [], [], 0.0, 0.0, "")
         self.assertEqual(bridge.error, NOT_RUNNING)
 
 

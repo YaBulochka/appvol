@@ -68,6 +68,22 @@ Kirigami.ApplicationWindow {
                 ]
             }
 
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                Controls.Label {
+                    text: "Show app name in OSD"
+                    font: Kirigami.Theme.smallFont
+                    opacity: 0.85
+                }
+
+                Controls.Switch {
+                    checked: bridge.osdShowName
+                    onToggled: bridge.setOsdShowName(checked)
+                }
+            }
+
             ListView {
                 id: list
                 Layout.fillWidth: true

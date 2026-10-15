@@ -113,6 +113,10 @@ class Client:
         """Toggle mute, with the OSD."""
         return self.call("ToggleMuteTarget", str(profile_id))
 
+    def set_osd_show_name(self, show: bool) -> dict:
+        """Show or hide the application name in the OSD, for every profile."""
+        return self.call("SetOsdShowName", bool(show))
+
     def add_profile(
         self,
         profile_id: str,
@@ -122,7 +126,6 @@ class Client:
         step: float = 0.0,
         max_volume: float = 0.0,
         icon: str = "",
-        osd_name: str = "never",
     ) -> dict:
         """Create or replace a profile."""
         return self.call(
@@ -134,7 +137,6 @@ class Client:
             dbus.Double(float(step)),
             dbus.Double(float(max_volume)),
             str(icon),
-            str(osd_name),
         )
 
     def remove_profile(self, profile_id: str) -> dict:

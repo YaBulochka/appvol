@@ -17,7 +17,7 @@ import dbus
 
 from appvol import daemon
 from appvol.config import Config
-from appvol.profiles import MODE_FOCUS, OSD_NAME_ALWAYS, OSD_NAME_NEVER, Profile, active_profile
+from appvol.profiles import MODE_FOCUS, Profile, active_profile
 from appvol.profiles import parse as parse_profiles
 
 
@@ -308,28 +308,13 @@ class ShortcutServerRestartTest(unittest.TestCase):
 
 
 class OsdCaptionTest(unittest.TestCase):
-    """The Active profile shows the icon alone; the reply keeps the name."""
+    """The OSD captions the application name only when the global checkbox allows it."""
 
-    def test_the_active_profile_hides_the_name(self) -> None:
-        self.assertEqual(daemon.osd_caption(active_profile(), "Firefox"), "")
+    def test_the_name_is_hidden_when_the_checkbox_is_off(self) -> None:
+        self.assertEqual(daemon.osd_caption(False, "Firefox"), "")
 
-    def test_a_stream_profile_shows_its_name(self) -> None:
-        profile = Profile(id="spotify", name="Spotify", osd_name=OSD_NAME_ALWAYS)
-        self.assertEqual(daemon.osd_caption(profile, "Spotify"), "Spotify")
-
-    def test_a_stream_profile_hides_its_name_by_default(self) -> None:
-        # New profiles default to ``osd_name = never``: the OSD shows the icon
-        # alone, and the name travels in the reply instead.
-        profile = Profile(id="spotify", name="Spotify")
-        self.assertEqual(daemon.osd_caption(profile, "Spotify"), "")
-
-    def test_always_puts_the_name_back_on_a_focus_profile(self) -> None:
-        profile = Profile(id="focus", mode=MODE_FOCUS, osd_name=OSD_NAME_ALWAYS)
-        self.assertEqual(daemon.osd_caption(profile, "Firefox"), "Firefox")
-
-    def test_never_silences_a_stream_profile(self) -> None:
-        profile = Profile(id="spotify", name="Spotify", osd_name=OSD_NAME_NEVER)
-        self.assertEqual(daemon.osd_caption(profile, "Spotify"), "")
+    def test_the_name_is_shown_when_the_checkbox_is_on(self) -> None:
+        self.assertEqual(daemon.osd_caption(True, "Firefox"), "Firefox")
 
 
 class StepDaemon(daemon.Daemon):

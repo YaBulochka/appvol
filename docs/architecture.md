@@ -130,10 +130,11 @@ the streams of the shell there: `plasmashell`, `kwin`, `kded` and the event and
 notification sounds, matched by the same name variants as a window. An explicit
 `include` still reaches them, so nothing is unreachable.
 
-`step`, `max_volume`, `icon` and `osd_name` are per profile; an unset value falls
-back to `config.toml`. A new profile defaults to `osd_name = never`, so the OSD
-shows the icon alone; `auto` captions a stream profile and leaves the Active one
-with the icon alone, `always` captions both, and `never` captions neither.
+`step`, `max_volume`, `icon` are per profile; an unset value falls back to
+`config.toml`. Whether the OSD captions the application name is decided by one
+checkbox in the window (“Show app name in OSD”, stored as `osd_show_name` in
+`config.toml`), shared by every profile — it is off by default, so the OSD
+shows the icon alone.
 
 Switching is a toggle: a profile key switches to that profile, the same key
 switches back to Active, another profile key switches over. The three volume keys
