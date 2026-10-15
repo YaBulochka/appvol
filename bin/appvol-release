@@ -15,10 +15,14 @@ root="$(dirname "$self")/.."
 cd "$root"
 
 with_package=no
+with_deb=no
+with_rpm=no
 allow_dirty=no
 while [ $# -gt 0 ]; do
     case "$1" in
         --package) with_package=yes ;;
+        --deb)     with_deb=yes ;;
+        --rpm)     with_rpm=yes ;;
         --allow-dirty) allow_dirty=yes ;;
         -h|--help)
             sed -n '2,10p' "$self" | sed 's/^# \{0,1\}//'
@@ -113,6 +117,53 @@ if [ "$with_package" = yes ]; then
     done
 fi
 
+# .deb and .rpm need fpm (one tool for both formats).  The package root is built
+# from the release archive itself, so the result is reproducible and does not
+# depend on makepkg or pacman.
+prepare_pkgroot() {
+    local root="$1"
+    rm -rf "$root"
+    mkdir -p "$root/opt/appvol" "$root/usr/bin" "$root/usr/lib/systemd/user" \
+        "$root/usr/share/applications" "$root/usr/share/icons/hicolor/scalable/apps"
+    # Copy the project, leaving out anything that is not part of the release.
+    tar --exclude=./.git --exclude=./dist --exclude='./packaging/*.tar.gz' \
+        --exclude='./packaging/*.sha256' --exclude='./packaging/*.pkg.tar.*' \
+        --exclude=__pycache__ --exclude='*.pyc' \
+        -cf - . | tar -xf - -C "$root/opt/appvol"
+    # System-wide install: absolute paths instead of install.sh's $HOME-relative ones.
+    sed "s|@APPVOL@|/opt/appvol/bin/appvol|g" \
+        "$root/opt/appvol/desktop/org.appvol.desktop.in" >"$root/usr/share/applications/org.appvol.desktop"
+    sed "s|@APPVOL_GUI@|/opt/appvol/bin/appvol-gui|g" \
+        "$root/opt/appvol/desktop/org.appvol.gui.desktop.in" >"$root/usr/share/applications/org.appvol.gui.desktop"
+    sed "s|@APPVOLD@|/opt/appvol/bin/appvold|" \
+        "$root/opt/appvol/systemd/appvold.service.in" >"$root/usr/lib/systemd/user/appvold.service"
+    cp "$root/opt/appvol/desktop/appvol.svg" "$root/usr/share/icons/hicolor/scalable/apps/"
+    ln -sf /opt/appvol/bin/appvol   "$root/usr/bin/appvol"
+    ln -sf /opt/appvol/bin/appvold  "$root/usr/bin/appvold"
+    ln -sf /opt/appvol/bin/appvol-gui "$root/usr/bin/appvol-gui"
+    rm -rf "$root/opt/appvol/desktop" "$root/opt/appvol/systemd"
+}
+
+fpm_package() {
+    local fmt="$1" ext="$2"
+    if ! command -v fpm >/dev/null 2>&1; then
+        echo "appvol-release: --$fmt needs fpm (gem install fpm, or ruby-fpm on Arch)" >&2
+        exit 1
+    fi
+    prepare_pkgroot "dist/pkgroot"
+    fpm -s dir -t "$fmt" -n appvol -v "$version" -C dist/pkgroot \
+        -p "dist/appvol-${version}-1.$ext" usr opt >/dev/null
+    echo "appvol-release: package built: dist/appvol-${version}-1.$ext"
+}
+
+if [ "$with_deb" = yes ]; then
+    fpm_package deb deb
+fi
+
+if [ "$with_rpm" = yes ]; then
+    fpm_package rpm rpm
+fi
+
 echo
 echo "appvol: release $version"
 echo "        dist/$archive  ($(du -h "dist/$archive" | cut -f1), sha256 ${sum:0:16}...)"
@@ -120,6 +171,8 @@ echo "        dist/$archive  ($(du -h "dist/$archive" | cut -f1), sha256 ${sum:0
 true
 echo "        install:  (cd packaging && makepkg -si)   or   sudo pacman -U dist/*.pkg.tar.*"
 echo "        or:       ./install.sh --service          (per-user, no root)"
+[ "$with_deb" = yes ] && echo "        or:       sudo dpkg -i dist/appvol-${version}-1.deb"
+[ "$with_rpm" = yes ] && echo "        or:       sudo rpm -i dist/appvol-${version}-1.rpm"
 if [ -d .git ]; then
     if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
         echo "        git tag v$version is in place"
