@@ -28,6 +28,7 @@
 #
 #   ~/.local/share/applications/org.appvol.gui.desktop
 #   ~/.local/share/icons/hicolor/scalable/apps/appvol.svg
+#   ~/.local/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg
 #
 # Nothing outside those paths is touched, and no root privileges are needed.
 # Arch users may prefer the pacman package instead: see packaging/PKGBUILD.
@@ -44,10 +45,11 @@ data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
 install_dir="$prefix/share/appvol"
 unit="$config_home/systemd/user/appvold.service"
 gui_entry="$data_home/applications/org.appvol.gui.desktop"
-gui_icon="$data_home/icons/hicolor/scalable/apps/appvol.svg"
+gui_icon="$prefix/share/icons/hicolor/scalable/apps/appvol.svg"
+gui_symbolic="$prefix/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg"
 
 usage() {
-    sed -n '2,33p' "$self" | sed 's/^# \{0,1\}//'
+    sed -n '2,34p' "$self" | sed 's/^# \{0,1\}//'
     echo
     echo "Options: --service  --prefix DIR  --no-gui  --uninstall  --help"
 }
@@ -98,6 +100,15 @@ want_gui() {
     "$python" -c "import PySide6" >/dev/null 2>&1
 }
 
+# A package build stages the tree and leaves the cache to the package manager, so
+# this only runs for a per-user install, and a missing tool is not an error.
+update_icon_cache() {
+    if [ -n "$destdir" ] || ! command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        return 0
+    fi
+    gtk-update-icon-cache -f -t "$1" >/dev/null 2>&1 || true
+}
+
 check_dependencies() {
     local missing
     missing="$(missing_modules)"
@@ -129,7 +140,7 @@ uninstall() {
     for name in appvol appvold appvol-gui; do
         rm -f "$destdir$prefix/bin/$name"
     done
-    rm -f "$destdir$gui_entry" "$destdir$gui_icon"
+    rm -f "$destdir$gui_entry" "$destdir$gui_icon" "$destdir$gui_symbolic"
     rm -rf "$destdir$install_dir"
     # Only succeeds when nothing else lives there.
     rmdir "$destdir$prefix/bin" "$destdir$prefix/share" 2>/dev/null || true
@@ -201,6 +212,13 @@ if want_gui; then
     install -d "$destdir$(dirname "$gui_entry")"
     sed "s|@APPVOL_GUI@|$install_dir/bin/appvol-gui|g" \
         "$root/desktop/org.appvol.gui.desktop.in" >"$destdir$gui_entry"
+    # The app icon belongs with the desktop entry; the tray icon is symbolic, so
+    # Plasma recolours it with the rest of the panel.
+    install -Dm644 "$root/desktop/icons/hicolor/scalable/apps/appvol.svg" \
+        "$destdir$gui_icon"
+    install -Dm644 "$root/desktop/icons/hicolor/symbolic/apps/appvol-symbolic.svg" \
+        "$destdir$gui_symbolic"
+    update_icon_cache "$prefix/share/icons/hicolor"
     echo "appvol: window and tray icon installed (appvol-gui)"
 elif [ "$with_gui" = auto ]; then
     echo "appvol: note: PySide6 is missing, so the window and the tray icon were skipped"
