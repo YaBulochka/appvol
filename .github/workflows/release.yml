@@ -21,7 +21,7 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the test dependencies
         run: |
           sudo apt-get update
@@ -32,13 +32,13 @@ jobs:
   tarball:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - name: Build the release archive
         run: bin/appvol-release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tarball
           path: dist/*.tar.gz
@@ -46,7 +46,7 @@ jobs:
   pacman:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
@@ -64,7 +64,7 @@ jobs:
               chown -R builder:builder /src
               su builder -c "cd /src && bin/appvol-release --package"
             '
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pacman
           path: dist/*.pkg.tar.zst
@@ -72,7 +72,7 @@ jobs:
   deb-rpm:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
@@ -86,7 +86,7 @@ jobs:
           sudo apt-get install -y rpm
       - name: Build the .deb and .rpm packages
         run: bin/appvol-release --deb --rpm
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deb-rpm
           path: |
@@ -102,11 +102,11 @@ jobs:
     steps:
       # gh reads the repository from the checkout; without it, it bails with
       # "not a git repository".
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
