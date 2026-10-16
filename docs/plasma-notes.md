@@ -1,7 +1,8 @@
-# Plasma 6.7.5 notes
+# Plasma 6.8 notes
 
-Recon on a live system. Every item either contradicted an assumption or refined
-one, and the code follows what the system actually does.
+Recon on a live system and confirmed on Plasma 6.8. Every item either
+contradicted an assumption or refined one, and the code follows what the system
+actually does.
 
 ## KWin scripting
 
