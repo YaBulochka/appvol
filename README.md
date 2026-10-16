@@ -1,5 +1,22 @@
 # appvol
 
+<div align="center">
+
+[Releases](https://github.com/YaBulochka/appvol/releases/latest) ·
+[Quick start](#quick-start) ·
+[Install](#install) ·
+[Hotkeys](#hotkeys) ·
+[Profiles](#profiles) ·
+[Documentation](#documentation) ·
+[Troubleshooting](docs/troubleshooting.md) ·
+[Report a bug](https://github.com/YaBulochka/appvol/issues/new)
+
+[![Release](https://img.shields.io/github/v/release/YaBulochka/appvol)](https://github.com/YaBulochka/appvol/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/YaBulochka/appvol)](LICENSE)
+[![Build](https://github.com/YaBulochka/appvol/actions/workflows/release.yml/badge.svg)](https://github.com/YaBulochka/appvol/actions/workflows/release.yml)
+
+</div>
+
 Per-application volume control by hotkey for **KDE Plasma 6.8 (Wayland, PipeWire)**.
 
 Press a key, and appvol changes the volume of every audio stream that belongs to
@@ -11,18 +28,38 @@ window and every application that is playing.
   <img src="docs/images/demo.gif" alt="appvol changing the volume of the focused window, with the KDE OSD" width="720">
 </p>
 
+Plasma's volume applet and `pavucontrol` set the volume of one application with
+the mouse. appvol is for the keyboard: the volume of whatever you are looking at
+goes up and down without leaving it.
+
 ```
 appvol up      # +5% for the focused application
 appvol down    # -5%
 appvol mute    # toggle mute
 appvol list    # streams, cached focus, profiles, and which match step fired
 appvol apps    # what is playing right now, with the identifiers profiles use
-appvol mode    # cycle the profiles, or the applications that are playing
+appvol mode    # show the mode; "appvol mode auto" or "appvol mode profiles" switches it
 ```
 
 A user daemon on the session bus, a KWin script that reports the focused window,
 and a thin client for the hotkeys. The window and the tray icon come with the
 `appvol-gui` package.
+
+## Quick start
+
+1. Download the packages for your system from the
+   [latest release](https://github.com/YaBulochka/appvol/releases/latest) and
+   install them; [Install](#install) has the command for each distribution.
+2. Start the daemon:
+
+   ```
+   systemctl --user daemon-reload
+   systemctl --user enable --now appvold
+   ```
+
+3. Open **System Settings → Shortcuts**, search for "appvol" and bind **Volume up**,
+   **Volume down** and **Toggle mute**. That is all: the daemon registers the
+   actions itself.
 
 ## Hotkeys
 
@@ -57,7 +94,7 @@ its last part, so `firefox` finds `org.mozilla.firefox`. An empty `--include`
 means every application stream with the shell left out, and `--exclude` removes
 applications, which is how an inversion profile is built. `--step`,
 `--max-volume` and `--icon` override the config for that profile. The daemon
-keeps them all in `~/.config/appvol/profiles.toml`.
+keeps the profiles in `~/.config/appvol/profiles.toml`.
 
 Every profile is one more action under **Appvol** in System Settings → Shortcuts.
 While a profile is current, the volume keys follow it. The OSD captions the
@@ -103,39 +140,21 @@ actions and **Quit**.
 
 Details in [docs/gui.md](docs/gui.md).
 
-## Quick start
-
-Download the packages for your system from the
-[latest release](https://github.com/YaBulochka/appvol/releases/latest), install
-them ([Install](#install) has the command for each distribution), then start the
-daemon:
-
-```
-systemctl --user daemon-reload
-systemctl --user enable --now appvold
-```
-
-Open **System Settings → Shortcuts**, search for "appvol" and bind **Volume up**,
-**Volume down** and **Toggle mute**. That is all: the daemon registers the actions
-itself.
-
 ## Requirements
 
 Tested on **KDE Plasma 6.8, Wayland session**; Plasma 5 is not supported. The
 session provides `kwin` (focus), `plasmashell` (OSD), `kglobalacceld` and System
 Settings (hotkeys), and PipeWire with `pipewire-pulse`.
 
-The daemon and the CLI need these Python modules. `install.sh` prints the command
-for your distribution:
+The packages pull in everything else. Only the no-root `install.sh` route needs
+these Python modules by hand, and prints the command for your distribution:
 
-| Import name | Arch package      | Why                                     |
-| ----------- | ----------------- | --------------------------------------- |
-| `tomllib`   | `python` (3.11+)  | reads the config                        |
-| `dbus`      | `python-dbus`     | session bus: the daemon API and the OSD |
-| `gi`        | `python-gobject`  | the GLib main loop the daemon runs in   |
-| `pulsectl`  | `python-pulsectl` | stream volume through pipewire-pulse    |
-
-Debian and Fedora call them `python3-dbus`, `python3-gi` and `python3-pulsectl`.
+| Import name | Arch package      | Debian, Ubuntu     | Fedora             |
+| ----------- | ----------------- | ------------------ | ------------------ |
+| `tomllib`   | `python` (3.11+)  | `python3` (3.11+)  | `python3` (3.11+)  |
+| `dbus`      | `python-dbus`     | `python3-dbus`     | `python3-dbus`     |
+| `gi`        | `python-gobject`  | `python3-gi`       | `python3-gobject`  |
+| `pulsectl`  | `python-pulsectl` | `python3-pulsectl` | `python3-pulsectl` |
 
 The window and the tray icon are optional and add PySide6 and Kirigami
 (`pyside6`, `kirigami`, `qqc2-desktop-style` and `breeze-icons` on Arch). The
@@ -145,7 +164,7 @@ daemon and the CLI never import them, so a minimal install can leave them out.
 
 Download the files for your system from the
 [latest release](https://github.com/YaBulochka/appvol/releases/latest) into a
-directory and `cd` there. To fetch them all at once:
+directory and `cd` there. With the GitHub CLI, one command fetches them all:
 
 ```
 mkdir appvol-pkg && cd appvol-pkg
@@ -165,6 +184,12 @@ The files of a release (`X.Y.Z` is its version):
 | Fedora                   | `appvol-X.Y.Z-1.noarch.rpm` and `appvol-gui-X.Y.Z-1.noarch.rpm`           |
 | any distribution         | `appvol-X.Y.Z.tar.gz`, the source archive with `install.sh`               |
 | all of the above         | `SHA256SUMS`                                                              |
+
+**Plasma 6 is required**, which rules out Debian 12 and Ubuntu 24.04 with its
+stock Plasma 5. Debian 13, Ubuntu 25.04 and later, and Kubuntu 26.04 LTS ship
+Plasma 6. KDE neon is still built on Ubuntu 24.04 LTS but carries Plasma 6 from
+KDE's own repositories, so the `.deb` files should install there too; that is
+not tested.
 
 ### Arch Linux
 
@@ -189,8 +214,6 @@ sudo dnf install ./appvol-*.rpm            # appvol and appvol-gui
 systemctl --user daemon-reload
 systemctl --user enable --now appvold
 ```
-
-Plasma 6 is required, which rules out Debian 12 and Ubuntu 24.04.
 
 ### Verify the download (optional)
 
