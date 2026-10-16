@@ -57,7 +57,7 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `Profiles()` | ` -> s` | client | JSON: the profiles and the current one |
 | `Overview()` | ` -> s` | window, tray | JSON: every profile plus its live volume, mute and match count |
 | `Applications()` | ` -> s` | window editor | JSON: the applications playing now |
-| `AddProfile(id, name, include, exclude, step, max_volume, icon, osd_name)` | `ssasasddss -> s` | client, window | JSON: the profiles after the change |
+| `AddProfile(id, name, include, exclude, step, max_volume, icon)` | `ssasasdds -> s` | client, window | JSON: the profiles after the change |
 | `RemoveProfile(id)` | `s -> s` | client, window | JSON: the profiles after the change |
 | `Reload()` | ` -> s` | client | read `profiles.toml` again |
 | `List()` | ` -> s` | client | JSON: config, profile, focus, match, streams, OSD appearance |
