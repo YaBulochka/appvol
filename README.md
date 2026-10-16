@@ -82,6 +82,16 @@ the window and the tray icon, and depends on `appvol`. Install both, or only
 `appvol` for a headless install. Each block below starts the daemon with the
 session afterwards.
 
+The files of a release (`X.Y.Z` is its version):
+
+| Distribution             | Files                                                                     |
+| ------------------------ | ------------------------------------------------------------------------- |
+| Arch Linux               | `appvol-X.Y.Z-1-any.pkg.tar.zst` and `appvol-gui-X.Y.Z-1-any.pkg.tar.zst` |
+| Debian, Ubuntu, KDE neon | `appvol_X.Y.Z-1_all.deb` and `appvol-gui_X.Y.Z-1_all.deb`                 |
+| Fedora                   | `appvol-X.Y.Z-1.noarch.rpm` and `appvol-gui-X.Y.Z-1.noarch.rpm`           |
+| any distribution         | `appvol-X.Y.Z.tar.gz`, the source archive with `install.sh`               |
+| all of the above         | `SHA256SUMS`                                                              |
+
 ### Arch Linux
 
 ```
