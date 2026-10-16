@@ -17,6 +17,7 @@ import dbus
 
 from appvol import daemon
 from appvol.config import Config, parse as parse_config
+from appvol.match import Stream
 from appvol.profiles import MODE_FOCUS, Profile, active_profile
 from appvol.profiles import parse as parse_profiles
 
@@ -460,6 +461,75 @@ class OsdShowNameTest(unittest.TestCase):
 
             stored = parse_config(app.config_path.read_text(encoding="utf-8"))
             self.assertTrue(stored.osd_show_name)
+
+
+class RecordingPulse:
+    """A stream snapshot and a place to write volumes to."""
+
+    def __init__(self, streams=()) -> None:
+        self._streams = list(streams)
+        self.written: list[tuple] = []
+
+    def streams(self):
+        return list(self._streams)
+
+    def set_volume(self, index, volume) -> None:
+        self.written.append((index, tuple(volume)))
+
+    def set_mute(self, index, mute) -> None:
+        self.written.append((index, mute))
+
+
+class RecordingOsd:
+    """The OSD as the daemon sees it: the calls, not the screen."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def volume_changed(self, value, icon="", name="", maximum=100) -> None:
+        self.calls.append(("volume", int(value), icon, name, int(maximum)))
+
+    def text(self, icon, text) -> None:
+        self.calls.append(("text", icon, text))
+
+
+class OsdCeilingTest(unittest.TestCase):
+    """The OSD bar is drawn against the ceiling of the profile it reports.
+
+    A profile may allow more than 100%, and the bar has to know that ceiling,
+    or it fills up at 100% while the volume keeps going.
+    """
+
+    def make(self, tmp: str, max_volume: float | None):
+        profile = Profile(
+            id="vesktop", name="Vesktop", include=("vesktop",), max_volume=max_volume
+        )
+        app = StepDaemon(Path(tmp), [profile])
+        app.pulse = RecordingPulse(
+            [Stream(index=1, props={"application.name": "vesktop"}, volume=(1.0,))]
+        )
+        app.osd = RecordingOsd()
+        return app, profile
+
+    def test_a_volume_change_reports_the_profile_ceiling(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, profile = self.make(tmp, 150.0)
+
+            app._adjust(daemon.UP, 0.0, profile)
+
+            kind, value, _icon, _name, maximum = app.osd.calls[-1]
+            self.assertEqual(kind, "volume")
+            self.assertEqual(maximum, 150)
+            self.assertGreater(value, 100)
+
+    def test_a_profile_without_a_ceiling_uses_the_global_one(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, profile = self.make(tmp, None)
+            app.config = Config(max_volume=120.0)
+
+            app._adjust(daemon.UP, 0.0, profile)
+
+            self.assertEqual(app.osd.calls[-1][-1], 120)
 
 
 if __name__ == "__main__":

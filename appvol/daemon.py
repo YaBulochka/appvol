@@ -536,7 +536,9 @@ class Daemon(dbus.service.Object):
             # never its name — Active covers every stream of that window.
             _, icon, percent = self._last_active
             log.info("cycle on active: icon %r, %s%%", icon, percent)
-            self.osd.volume_changed(percent, icon=icon, name="")
+            self.osd.volume_changed(
+                percent, icon=icon, name="", maximum=self._max_percent_of(active_profile())
+            )
             return
         self._feedback(profile, osd=True)
 
@@ -575,7 +577,12 @@ class Daemon(dbus.service.Object):
             if profile.mode == MODE_FOCUS:
                 self._last_active = (name, icon, percent)
             if osd:
-                self.osd.volume_changed(percent, icon=icon, name=osd_caption(self.config.osd_show_name, name))
+                self.osd.volume_changed(
+                    percent,
+                    icon=icon,
+                    name=osd_caption(self.config.osd_show_name, name),
+                    maximum=self._max_percent_of(profile),
+                )
         elif profile.mode == MODE_FOCUS:
             log.info("nothing to show for %s: %s", profile.id, result.reason)
         elif osd:
@@ -874,6 +881,10 @@ class Daemon(dbus.service.Object):
     def _max_volume_of(self, profile: Profile) -> float:
         return (profile.max_volume or self.config.max_volume) / 100.0
 
+    def _max_percent_of(self, profile: Profile) -> int:
+        """The ceiling the OSD bar of a profile is drawn against, in percent."""
+        return int(round(self._max_volume_of(profile) * 100))
+
     def _adjust(self, direction: str, step_percent: float, profile: Profile | None = None) -> dict:
         profile = profile or self.current_profile()
         if profile.id == self.state.selection.current:
@@ -937,7 +948,12 @@ class Daemon(dbus.service.Object):
             log.debug("osd: %s%% with icon %r (app %r)", payload["percent"], icon, name)
             if profile.mode == MODE_FOCUS:
                 self._last_active = (name, icon, payload["percent"] or 0)
-            self.osd.volume_changed(payload["percent"], icon=icon, name=osd_caption(self.config.osd_show_name, name))
+            self.osd.volume_changed(
+                payload["percent"],
+                icon=icon,
+                name=osd_caption(self.config.osd_show_name, name),
+                maximum=self._max_percent_of(profile),
+            )
         return payload
 
     def _toggle_mute(self, profile: Profile | None = None) -> dict:
@@ -987,18 +1003,20 @@ class Daemon(dbus.service.Object):
         name, icon = self._appearance(profile, result, by_index)
         payload["osd"] = {"name": name, "icon": icon}
         name = osd_caption(self.config.osd_show_name, name)
+        maximum = self._max_percent_of(profile)
         if name:
             if mute:
-                # Plasma renders "<name> Muted" itself when the value is zero.
-                self.osd.volume_changed(0, icon=icon, name=name)
+                # The player method renders "<name> Muted" itself when the value
+                # is zero; a custom ceiling falls back to the generic "Audio Muted".
+                self.osd.volume_changed(0, icon=icon, name=name, maximum=maximum)
             elif payload["percent"]:
-                self.osd.volume_changed(payload["percent"], icon=icon, name=name)
+                self.osd.volume_changed(payload["percent"], icon=icon, name=name, maximum=maximum)
             else:
                 self.osd.text(icon, "Unmuted")
         elif mute:
             self.osd.text(icon, "Muted")
         elif payload["percent"]:
-            self.osd.volume_changed(payload["percent"], icon=icon)
+            self.osd.volume_changed(payload["percent"], icon=icon, maximum=maximum)
         else:
             # Nothing to show on the progress bar.
             self.osd.text(icon, "Unmuted")

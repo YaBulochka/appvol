@@ -67,6 +67,28 @@ class OsdTest(unittest.TestCase):
         self.assertEqual([int(value) for value in args], [42])
         self.assertEqual(kwargs, {"dbus_interface": OSD_IFACE, "signature": "i"})
 
+    def test_a_ceiling_other_than_100_scales_the_bar(self) -> None:
+        factory = Factory()
+        Osd(connect=factory).volume_changed(150, icon="vesktop", name="Vesktop", maximum=150)
+        method, args, kwargs = factory.calls[0]
+        self.assertEqual(method, "volumeChanged")
+        self.assertEqual([int(value) for value in args], [150, 150])
+        self.assertEqual(kwargs, {"dbus_interface": OSD_IFACE, "signature": "ii"})
+
+    def test_a_ceiling_below_100_scales_as_well(self) -> None:
+        factory = Factory()
+        Osd(connect=factory).volume_changed(50, maximum=50)
+        method, args, kwargs = factory.calls[0]
+        self.assertEqual(method, "volumeChanged")
+        self.assertEqual([int(value) for value in args], [50, 50])
+
+    def test_the_default_ceiling_keeps_the_player_method(self) -> None:
+        factory = Factory()
+        Osd(connect=factory).volume_changed(42, icon="spotify", name="Spotify", maximum=100)
+        method, args, kwargs = factory.calls[0]
+        self.assertEqual(method, "mediaPlayerVolumeChanged")
+        self.assertEqual(list(args[1:]), ["Spotify", "spotify"])
+
     def test_a_name_is_sent_as_the_caption(self) -> None:
         factory = Factory()
         Osd(connect=factory).volume_changed(42, icon="spotify", name="Spotify")

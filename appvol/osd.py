@@ -13,13 +13,17 @@ Methods (verified against ``shell/osd.cpp`` of plasma-workspace and live on
 Plasma 6.8):
 
 * ``volumeChanged(percent)`` renders the generic volume icon;
+* ``volumeChanged(percent, maximumPercent)`` is the same, with the progress bar
+  drawn against ``maximumPercent`` instead of 100;
 * ``mediaPlayerVolumeChanged(percent, name, iconName)`` renders ``iconName`` with
   the progress bar and ``name`` as the caption, and ``<name> Muted`` when the
   percent is zero;
 * ``showText(iconName, text)`` renders an icon with a free-form caption.
 
-appvol prefers the second method whenever the application icon is known, so the
-OSD looks like the entry of that application on the panel.
+appvol prefers the player method whenever the application icon is known, so the
+OSD looks like the entry of that application on the panel.  That method pins the
+bar to 100%, so a profile with a ceiling of its own falls back to the two-argument
+``volumeChanged``: a correct bar at the price of the generic icon and the caption.
 """
 
 from __future__ import annotations
@@ -93,7 +97,7 @@ class Osd:
                     exc.get_dbus_name(),
                 )
 
-    def volume_changed(self, value: int, icon: str = "", name: str = "") -> None:
+    def volume_changed(self, value: int, icon: str = "", name: str = "", maximum: int = 100) -> None:
         """Show the volume OSD for an application.
 
         ``icon`` comes from :mod:`appvol.icon`, ``name`` is the caption the
@@ -101,9 +105,19 @@ class Osd:
         entry, and writes ``<name> Muted`` when the value is zero.  Without an
         icon and without a name the generic volume OSD is used, so the user still
         gets feedback.
+
+        ``maximum`` is the ceiling the progress bar is drawn against, in percent.
+        A profile may allow more than 100%: Plasma then draws the bar against
+        that ceiling and prints the real percentage.  ``mediaPlayerVolumeChanged``
+        pins the bar to 100%, so any other ceiling has to go through
+        ``volumeChanged(percent, maximumPercent)``.  That method draws the generic
+        volume icon and carries no caption, which is the price of a correct bar.
         """
         percent = dbus.Int32(int(value))
-        if icon or name:
+        limit = dbus.Int32(int(maximum))
+        if limit != 100:
+            self._call("volumeChanged", "ii", [percent, limit], "volume")
+        elif icon or name:
             # Explicit signature: the interface also declares plain
             # volumeChanged overloads and dbus-python picks the wrong one when it
             # has to guess.
