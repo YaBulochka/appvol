@@ -19,8 +19,8 @@ the stock KDE OSD. Above 100% the bar gives way to the percentage, see below.
 * `showText(icon, text)` draws an icon with a caption, and is what `mute` uses.
 
 appvol prefers the first method whenever the icon is known. Whether the `name`
-argument is filled in comes from “Show app name in OSD”, the one checkbox in
-the window: off by default, the OSD shows the icon alone; on, it captions the
+argument is filled in comes from **OSD App Name**, the one switch in the window:
+off by default, the OSD shows the icon alone; on, it captions the
 application name — both for stream profiles and for the Active one. A stream profile reads
 "Spotify" with the volume bar and "Spotify Muted" at zero percent, while a volume
 key on the focused window shows that window's icon and the bar and no name. The

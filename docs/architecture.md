@@ -133,7 +133,7 @@ notification sounds, matched by the same name variants as a window. An explicit
 
 `step`, `max_volume`, `icon` are per profile; an unset value falls back to
 `config.toml`. Whether the OSD captions the application name is decided by one
-checkbox in the window (“Show app name in OSD”, stored as `osd_show_name` in
+switch in the window (**OSD App Name**, stored as `osd_show_name` in
 `config.toml`), shared by every profile — it is off by default, so the OSD
 shows the icon alone.
 
