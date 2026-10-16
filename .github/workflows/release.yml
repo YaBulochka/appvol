@@ -93,8 +93,32 @@ jobs:
             dist/*.deb
             dist/*.rpm
 
+  # Install the built packages into the distributions they target and run the
+  # CLI once, so a broken dependency name or a bad file list fails the build.
+  smoke:
+    needs: deb-rpm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: deb-rpm
+          path: dist
+      - name: Smoke-test the packages on Debian 13
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" debian:13 bash -euxo pipefail -c '
+            apt-get update
+            apt-get install -y /dist/appvol*.deb
+            appvol --help
+          '
+      - name: Smoke-test the packages on Fedora
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" fedora:latest bash -euxo pipefail -c '
+            dnf install -y /dist/appvol*.rpm
+            appvol --help
+          '
+
   publish:
-    needs: [test, tarball, pacman, deb-rpm]
+    needs: [test, tarball, pacman, deb-rpm, smoke]
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:
