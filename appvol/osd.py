@@ -10,7 +10,7 @@ owner and keeps sending there: after plasmashell restarts, a cached proxy points
 at a dead connection and every call fails with ``ServiceUnknown``.
 
 Methods (verified against ``shell/osd.cpp`` of plasma-workspace and live on
-Plasma 6.7.5):
+Plasma 6.8):
 
 * ``volumeChanged(percent)`` renders the generic volume icon;
 * ``mediaPlayerVolumeChanged(percent, name, iconName)`` renders ``iconName`` with

@@ -330,7 +330,7 @@ class ShortcutActions:
     Settings while the daemon runs and no desktop file has to be regenerated.
     The keys the user assigns there live in ``kglobalshortcutsrc`` under the
     component name and survive a restart of the daemon; both were verified on
-    Plasma 6.7.5.  Registration failures are logged and ignored, so the CLI still
+    Plasma 6.8.  Registration failures are logged and ignored, so the CLI still
     works on a session without kglobalacceld.
     """
 
