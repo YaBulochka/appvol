@@ -11,10 +11,11 @@ the stock KDE OSD.
 * `mediaPlayerVolumeChanged(percent, name, icon)` draws `icon` with a progress
   bar and `name` as the caption, and `<name> Muted` at zero percent. In
   `shell/osd.cpp` of plasma-workspace this is `showProgress(icon, percent, 100,
-  name)`.
-* `volumeChanged(percent)` draws the generic volume icon. It is overloaded as
-  `(i)` and `(ii)`, so the call always passes an explicit
-  `signature="i"`.
+  name)`: the bar is pinned to 100%.
+* `volumeChanged(percent)` draws the generic volume icon, and
+  `volumeChanged(percent, maximumPercent)` the same against a ceiling of its own.
+  The method is overloaded as `(i)` and `(ii)`, so the call always passes an
+  explicit signature.
 * `showText(icon, text)` draws an icon with a caption, and is what `mute` uses.
 
 appvol prefers the first method whenever the icon is known. Whether the `name`
@@ -24,9 +25,19 @@ application name — both for stream profiles and for the Active one. A stream p
 "Spotify" with the volume bar and "Spotify Muted" at zero percent, while a volume
 key on the focused window shows that window's icon and the bar and no name. The
 name of the Active profile is still computed, `appvol list` prints it for
-diagnostics, and the reply keeps it for a client that wants to show it. When no
-icon is known, the OSD falls back to `volumeChanged(percent)` so the user still
-gets feedback:
+diagnostics, and the reply keeps it for a client that wants to show it.
+
+A profile may allow more than 100% (`Maximum volume`, capped at 150). The player
+method pins the bar to 100%, so the bar would fill up at 100% and the percentage
+would lie while the volume kept going. Whenever the ceiling is not 100%, appvol
+therefore calls `volumeChanged(percent, maximum)`: the bar is drawn against the
+ceiling and the label prints the real percentage. The price is Plasma's own audio
+icon (a warning one above 100%) instead of the application icon, and no caption.
+At a ceiling of 100% the player method stays, so the common case keeps the
+application icon and the name.
+
+When no icon is known, the OSD falls back to `volumeChanged(percent)` so the user
+still gets feedback:
 
 ```
 match:  step=pid matched=1 (streams owned by pid 155358)
@@ -35,10 +46,12 @@ osd:    icon='spotify' (app 'Spotify')
 
 `mute` on a profile with a caption uses the media player form with a value of zero,
 which Plasma renders as `<name> Muted`; a profile without one gets
-`showText(icon, "Muted")` instead. `unmute` shows the volume bar, or `Unmuted`
-through `showText` when the volume is zero and the bar would stay empty. A profile
-that matches nothing answers `no stream` instead of staying silent, because a
-profile key press is an explicit action on a target the user chose.
+`showText(icon, "Muted")` instead. A ceiling other than 100% drops the caption,
+so the mute message is Plasma's generic `Audio Muted`. `unmute` shows the volume
+bar, or `Unmuted` through `showText` when the volume is zero and the bar would
+stay empty. A profile that matches nothing answers `no stream` instead of staying
+silent, because a profile key press is an explicit action on a target the user
+chose.
 
 A profile has three icon sources, in this order: its own `icon` key, when the
 theme can render it; the matched stream, through the same chain as below; and the
