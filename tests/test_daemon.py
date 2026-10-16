@@ -494,10 +494,10 @@ class RecordingOsd:
 
 
 class OsdCeilingTest(unittest.TestCase):
-    """The OSD bar is drawn against the ceiling of the profile it reports.
+    """The daemon hands the ceiling of the profile to the OSD.
 
-    A profile may allow more than 100%, and the bar has to know that ceiling,
-    or it fills up at 100% while the volume keeps going.
+    Whether the OSD draws a bar against it or, above 100%, the icon and the
+    percentage, is the OSD's own call, pinned down in tests/test_osd.py.
     """
 
     def make(self, tmp: str, max_volume: float | None):

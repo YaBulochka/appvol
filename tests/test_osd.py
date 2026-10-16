@@ -69,10 +69,10 @@ class OsdTest(unittest.TestCase):
 
     def test_a_ceiling_other_than_100_scales_the_bar(self) -> None:
         factory = Factory()
-        Osd(connect=factory).volume_changed(150, icon="vesktop", name="Vesktop", maximum=150)
+        Osd(connect=factory).volume_changed(80, icon="vesktop", name="Vesktop", maximum=150)
         method, args, kwargs = factory.calls[0]
         self.assertEqual(method, "volumeChanged")
-        self.assertEqual([int(value) for value in args], [150, 150])
+        self.assertEqual([int(value) for value in args], [80, 150])
         self.assertEqual(kwargs, {"dbus_interface": OSD_IFACE, "signature": "ii"})
 
     def test_a_ceiling_below_100_scales_as_well(self) -> None:
@@ -81,6 +81,28 @@ class OsdTest(unittest.TestCase):
         method, args, kwargs = factory.calls[0]
         self.assertEqual(method, "volumeChanged")
         self.assertEqual([int(value) for value in args], [50, 50])
+
+    def test_above_100_keeps_the_application_icon_without_a_bar(self) -> None:
+        factory = Factory()
+        Osd(connect=factory).volume_changed(150, icon="vesktop", name="Vesktop", maximum=150)
+        method, args, kwargs = factory.calls[0]
+        self.assertEqual(method, "showText")
+        self.assertEqual(list(args), ["vesktop", "150%"])
+        self.assertEqual(kwargs, {"dbus_interface": OSD_IFACE, "signature": "ss"})
+
+    def test_above_100_without_an_icon_falls_back_to_the_ceiling_bar(self) -> None:
+        factory = Factory()
+        Osd(connect=factory).volume_changed(150, maximum=150)
+        method, args, _ = factory.calls[0]
+        self.assertEqual(method, "volumeChanged")
+        self.assertEqual([int(value) for value in args], [150, 150])
+
+    def test_exactly_100_still_scales_the_bar(self) -> None:
+        factory = Factory()
+        Osd(connect=factory).volume_changed(100, icon="vesktop", maximum=150)
+        method, args, _ = factory.calls[0]
+        self.assertEqual(method, "volumeChanged")
+        self.assertEqual([int(value) for value in args], [100, 150])
 
     def test_the_default_ceiling_keeps_the_player_method(self) -> None:
         factory = Factory()

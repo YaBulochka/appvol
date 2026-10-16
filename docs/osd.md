@@ -1,7 +1,7 @@
 # OSD and application icons
 
 A hotkey press shows the application icon and a volume bar with the percent, in
-the stock KDE OSD.
+the stock KDE OSD. Above 100% the bar gives way to the percentage, see below.
 
 ## Methods
 
@@ -29,12 +29,19 @@ diagnostics, and the reply keeps it for a client that wants to show it.
 
 A profile may allow more than 100% (`Maximum volume`, capped at 150). The player
 method pins the bar to 100%, so the bar would fill up at 100% and the percentage
-would lie while the volume kept going. Whenever the ceiling is not 100%, appvol
-therefore calls `volumeChanged(percent, maximum)`: the bar is drawn against the
-ceiling and the label prints the real percentage. The price is Plasma's own audio
-icon (a warning one above 100%) instead of the application icon, and no caption.
-At a ceiling of 100% the player method stays, so the common case keeps the
-application icon and the name.
+would lie while the volume kept going. Whenever the ceiling is not 100% and the
+volume is at or below 100%, appvol therefore calls `volumeChanged(percent,
+maximum)`: the bar is drawn against the ceiling and the label prints the real
+percentage. The price is Plasma's own audio icon (a warning one above 100%)
+instead of the application icon, and no caption. At a ceiling of 100% the player
+method stays, so the common case keeps the application icon and the name.
+
+Above 100% the ceiling bar is full whatever the value, so it would cost the
+application icon for nothing. Plasma has no call that carries both a custom ceiling
+and an application icon: `mediaPlayerVolumeChanged` pins the bar to 100%, and
+`volumeChanged` draws its own icon. appvol therefore keeps the application icon and
+prints the real percentage through `showText(icon, "105%")`, with no bar at all.
+Below or at 100% nothing changes.
 
 When no icon is known, the OSD falls back to `volumeChanged(percent)` so the user
 still gets feedback:

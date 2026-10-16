@@ -23,7 +23,11 @@ Plasma 6.8):
 appvol prefers the player method whenever the application icon is known, so the
 OSD looks like the entry of that application on the panel.  That method pins the
 bar to 100%, so a profile with a ceiling of its own falls back to the two-argument
-``volumeChanged``: a correct bar at the price of the generic icon and the caption.
+``volumeChanged`` while the volume stays at or below 100%: a correct bar at the
+price of the generic icon and the caption.  Above 100% that bar would be full
+whatever the value, so appvol keeps the icon and prints the real percentage through
+``showText`` instead, with no bar.  Plasma has no call that carries both a custom
+ceiling and an application icon, so one of the two has to go.
 """
 
 from __future__ import annotations
@@ -112,10 +116,17 @@ class Osd:
         pins the bar to 100%, so any other ceiling has to go through
         ``volumeChanged(percent, maximumPercent)``.  That method draws the generic
         volume icon and carries no caption, which is the price of a correct bar.
+
+        Above 100% that bar is full whatever the value, so it buys nothing and
+        still costs the icon.  Plasma has no call that carries both a custom
+        ceiling and an application icon, so appvol keeps the icon and prints the
+        real percentage through :meth:`text`, with no bar.
         """
         percent = dbus.Int32(int(value))
         limit = dbus.Int32(int(maximum))
-        if limit != 100:
+        if percent > 100 and icon:
+            self.text(icon, f"{int(percent)}%")
+        elif limit != 100:
             self._call("volumeChanged", "ii", [percent, limit], "volume")
         elif icon or name:
             # Explicit signature: the interface also declares plain
