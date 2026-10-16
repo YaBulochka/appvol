@@ -117,6 +117,10 @@ class Client:
         """Show or hide the application name in the OSD, for every profile."""
         return self.call("SetOsdShowName", bool(show))
 
+    def set_mode(self, mode: str) -> dict:
+        """Choose what the keys cycle: the profiles or the running applications."""
+        return self.call("SetMode", str(mode))
+
     def add_profile(
         self,
         profile_id: str,

@@ -14,6 +14,9 @@ Kirigami.AbstractCard {
     signal removeRequested(var profile)
 
     readonly property bool hasVolume: profile && profile.percent !== null && profile.percent !== undefined
+    // In the auto mode the list holds the applications that are playing, not the
+    // profiles of profiles.toml: they cannot be edited, keyed or stepped.
+    readonly property bool autoMode: bridge.mode === "auto"
     readonly property int maximum: Math.max(1, Math.round(
         (profile && profile.max_volume) || (bridge.config.max_volume) || 150))
     readonly property real globalStep: bridge.config.step || 5
@@ -31,6 +34,9 @@ Kirigami.AbstractCard {
         }
         if (profile.builtin || profile.mode === "focus") {
             return "Every stream of the focused window"
+        }
+        if (autoMode) {
+            return "Every stream of this application"
         }
         const include = profile.include || []
         const exclude = profile.exclude || []
@@ -140,6 +146,7 @@ Kirigami.AbstractCard {
 
             Controls.ToolButton {
                 icon.name: "document-edit"
+                visible: !card.autoMode
                 enabled: card.profile && !card.profile.builtin
                 Controls.ToolTip.visible: hovered
                 Controls.ToolTip.text: "Edit this profile"
@@ -148,6 +155,7 @@ Kirigami.AbstractCard {
 
             Controls.ToolButton {
                 icon.name: "edit-delete"
+                visible: !card.autoMode
                 enabled: card.profile && !card.profile.builtin
                 Controls.ToolTip.visible: hovered
                 Controls.ToolTip.text: "Remove this profile"
@@ -157,6 +165,11 @@ Kirigami.AbstractCard {
 
         RowLayout {
             spacing: Kirigami.Units.smallSpacing
+
+            // The key and the step belong to a profile of profiles.toml; in the
+            // auto mode only the built-in row keeps its step, which is the global
+            // one the applications follow.
+            visible: !card.autoMode || (card.profile ? card.profile.builtin : false)
 
             Controls.Label {
                 Layout.leftMargin: currentBox.width + Kirigami.Units.smallSpacing

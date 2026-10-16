@@ -253,6 +253,14 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(args[0], "")
         self.assertEqual(args[1], "up")
 
+    def test_set_mode_sends_the_mode(self) -> None:
+        proxy = FakeProxy()
+        client = Client(connect=lambda: proxy)
+        client.set_mode("auto")
+        name, args = proxy.calls[0]
+        self.assertEqual(name, "SetMode")
+        self.assertEqual(args[0], "auto")
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 is not installed")
 class ShortcutKeyTests(unittest.TestCase):
@@ -368,6 +376,26 @@ class BridgeTests(unittest.TestCase):
         name, args = self.proxy.calls[0]
         self.assertEqual(name, "SetOsdShowName")
         self.assertEqual(bool(args[0]), True)
+
+    def test_the_mode_follows_the_overview(self) -> None:
+        overview = {**OVERVIEW, "config": {**OVERVIEW["config"], "mode": "auto"}}
+        bridge = self.make({"Overview": overview, "Applications": APPLICATIONS})
+
+        bridge.refresh()
+
+        self.assertEqual(bridge.mode, "auto")
+
+    def test_the_mode_defaults_to_the_profiles(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.assertEqual(bridge.mode, "profiles")
+
+    def test_toggling_the_mode_writes_it(self) -> None:
+        bridge = self.make()
+        bridge.setMode("auto")
+        name, args = self.proxy.calls[0]
+        self.assertEqual(name, "SetMode")
+        self.assertEqual(args[0], "auto")
 
     def test_saving_a_profile_passes_the_lists_through(self) -> None:
         bridge = self.make()

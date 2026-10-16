@@ -24,12 +24,13 @@ Kirigami.ApplicationWindow {
 
     pageStack.initialPage: Kirigami.Page {
         id: profilesPage
-        title: "Profiles"
+        title: bridge.mode === "auto" ? "Running applications" : "Profiles"
 
         actions: [
             Kirigami.Action {
                 text: "New Profile"
                 icon.name: "list-add"
+                visible: bridge.mode !== "auto"
                 onTriggered: editor.openFor(null)
             },
             Kirigami.Action {
@@ -73,6 +74,31 @@ Kirigami.ApplicationWindow {
                 spacing: Kirigami.Units.smallSpacing
 
                 Controls.Label {
+                    text: "Cycle the running applications"
+                    font: Kirigami.Theme.smallFont
+                    opacity: 0.85
+                }
+
+                Controls.Switch {
+                    id: modeSwitch
+                    checked: false
+                    Controls.ToolTip.visible: hovered
+                    Controls.ToolTip.text: "Auto: the volume keys cycle Active and every application that is playing, in the order the applications started"
+                    onToggled: bridge.setMode(checked ? "auto" : "profiles")
+                    Connections {
+                        target: bridge
+                        onConfigChanged: modeSwitch.checked = bridge.mode === "auto"
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                Controls.Label {
                     text: "Show app name in OSD"
                     font: Kirigami.Theme.smallFont
                     opacity: 0.85
@@ -109,6 +135,11 @@ Kirigami.ApplicationWindow {
                     opacity: 0.7
                     font: Kirigami.Theme.smallFont
                     text: {
+                        if (bridge.mode === "auto") {
+                            return "The volume keys cycle Active and every application that is playing, in the order the applications started."
+                                + " A per-profile key does nothing here; switch back to the profiles to use one."
+                                + " appvol " + bridge.version
+                        }
                         let text = bridge.idleTimeout > 0
                             ? "A profile goes back to Active after " + Math.round(bridge.idleTimeout / 60)
                                 + " minutes without use."
@@ -122,7 +153,7 @@ Kirigami.ApplicationWindow {
             Kirigami.PlaceholderMessage {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                visible: bridge.profiles.length <= 1 && bridge.daemonRunning
+                visible: bridge.mode !== "auto" && bridge.profiles.length <= 1 && bridge.daemonRunning
                 icon.name: "list-add"
                 text: "No profiles yet"
                 explanation: "A profile targets the streams of one application, so you can raise Spotify and lower everything else."
@@ -131,6 +162,15 @@ Kirigami.ApplicationWindow {
                     icon.name: "list-add"
                     onTriggered: editor.openFor(null)
                 }
+            }
+
+            Kirigami.PlaceholderMessage {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: bridge.mode === "auto" && bridge.profiles.length <= 1 && bridge.daemonRunning
+                icon.name: "audio-volume-high"
+                text: "Nothing is playing"
+                explanation: "Every application that plays joins this list, and the volume keys cycle Active and the applications, in the order they started."
             }
         }
     }

@@ -83,6 +83,11 @@ class Bridge(QObject):
         """Whether the OSD captions the application name; one checkbox for all profiles."""
         return bool(self._config.get("osd_show_name", False))
 
+    @Property(str, notify=configChanged)
+    def mode(self) -> str:
+        """What the volume keys cycle: the profiles, or the running applications."""
+        return str(self._config.get("mode") or "profiles")
+
     @Property(str, notify=errorChanged)
     def error(self) -> str:
         """The last failure, empty while everything works."""
@@ -144,6 +149,11 @@ class Bridge(QObject):
     def setOsdShowName(self, show: bool) -> None:
         """Show or hide the application name in the OSD, from the window checkbox."""
         self._write(self.client.set_osd_show_name, bool(show))
+
+    @Slot(str)
+    def setMode(self, mode: str) -> None:
+        """Cycle the profiles or the running applications, from the window switch."""
+        self._write(self.client.set_mode, str(mode))
 
     @Slot(str, str, "QVariantList", "QVariantList", float, float, str)
     def saveProfile(

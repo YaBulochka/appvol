@@ -1216,6 +1216,7 @@ class Daemon(dbus.service.Object):
 
         by_index = {stream.index: stream for stream in streams} if streams else {}
         current = self.state.selection.current
+        auto = self.config.mode == MODE_AUTO
         entries = []
         for profile in (active_profile(), *self._targets(streams)):
             entry = {
@@ -1244,6 +1245,10 @@ class Daemon(dbus.service.Object):
                         else None,
                     }
                 )
+                if auto and not entry["builtin"] and matched_streams:
+                    # An auto target has no icon of its own: the window shows the
+                    # icon of the application, from its first stream, as the OSD does.
+                    entry["icon"] = resolve_icon(props=matched_streams[0].props) or ""
             entries.append(entry)
 
         return {
