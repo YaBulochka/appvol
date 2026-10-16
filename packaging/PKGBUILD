@@ -91,5 +91,13 @@ package_appvol-gui() {
     sed 's|@APPVOL_GUI@|/usr/bin/appvol-gui|g' desktop/org.appvol.gui.desktop.in \
         >"$pkgdir/usr/share/applications/org.appvol.gui.desktop"
 
+    # The app icon the entry names and the symbolic one for the tray.  The
+    # hicolor cache is refreshed by the gtk-update-icon-cache pacman hook, so
+    # nothing extra is needed here.
+    install -Dm644 desktop/icons/hicolor/scalable/apps/appvol.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/appvol.svg"
+    install -Dm644 desktop/icons/hicolor/symbolic/apps/appvol-symbolic.svg \
+        "$pkgdir/usr/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg"
+
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
