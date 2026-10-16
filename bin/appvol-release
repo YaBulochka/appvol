@@ -130,9 +130,10 @@ fi
 # The dependency names are the Debian/Ubuntu and Fedora ones, verified against
 # both trees (Debian 13, Fedora 44): Debian and Ubuntu split PySide6 per module
 # and ship Kirigami, the desktop style and Breeze as QML packages, Fedora ships
-# PySide6 whole and prefixes the KF6 packages with kf6-.  The Plasma 6 floor for
-# the .deb is spelled "4:6~": Debian numbers plasma-workspace with epoch 4, so a
-# bare "(>= 6)" would compare 4 against 0 and let even Plasma 5 through.
+# PySide6 whole and prefixes the KF6 packages with kf6-.  Plasma is deliberately
+# not a dependency: appvol is useless outside a Plasma session, but it is plain
+# that the user of a Plasma hotkey tool has Plasma, and a hard dependency would
+# drag the whole desktop onto a machine that only wants the CLI.
 url="https://github.com/YaBulochka/appvol"
 maintainer="appvol contributors <noreply@github.com>"
 description="Volume control for the audio streams of the focused window (KDE Plasma 6 on Wayland)"
@@ -228,7 +229,7 @@ if [ "$with_deb" = yes ] || [ "$with_rpm" = yes ]; then
     prep_src
     if [ "$with_deb" = yes ]; then
         fpm_package deb appvol _stage_core \
-            python3 python3-dbus python3-gi python3-pulsectl "plasma-workspace (>= 4:6~)"
+            python3 python3-dbus python3-gi python3-pulsectl
         fpm_package deb appvol-gui _stage_gui \
             appvol python3-pyside6.qtwidgets python3-pyside6.qtqml \
             qml6-module-org-kde-kirigami qml6-module-org-kde-desktop \
@@ -236,7 +237,7 @@ if [ "$with_deb" = yes ] || [ "$with_rpm" = yes ]; then
     fi
     if [ "$with_rpm" = yes ]; then
         fpm_package rpm appvol _stage_core \
-            python3 python3-dbus python3-gobject python3-pulsectl "plasma-workspace >= 6"
+            python3 python3-dbus python3-gobject python3-pulsectl
         fpm_package rpm appvol-gui _stage_gui \
             appvol python3-pyside6 kf6-kirigami kf6-qqc2-desktop-style \
             breeze-icon-theme
