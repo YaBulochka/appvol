@@ -25,14 +25,19 @@ tray icon for the profiles come with the `appvol-gui` package.
 
 ## Quick start
 
+Download the packages for your system from the
+[latest release](https://github.com/YaBulochka/appvol/releases/latest), install
+them ([Install](#install) has the exact command for each distribution), then start
+the daemon:
+
 ```
-tar xzf appvol-X.Y.Z.tar.gz && cd appvol-X.Y.Z
-./install.sh --service
+systemctl --user daemon-reload
+systemctl --user enable --now appvold
 ```
 
-Then open **System Settings → Shortcuts**, search for "appvol" and bind
-**Volume up**, **Volume down** and **Toggle mute**. That is all: the daemon
-registers the actions itself.
+Open **System Settings → Shortcuts**, search for "appvol" and bind **Volume up**,
+**Volume down** and **Toggle mute**. That is all: the daemon registers the actions
+itself.
 
 ## Requirements
 
@@ -41,58 +46,87 @@ Tested on **KDE Plasma 6.8, Wayland session**. Plasma 5 is not supported.
 The session provides: `kwin` (focus), `plasmashell` (OSD), `kglobalacceld` and
 System Settings (hotkeys), PipeWire with `pipewire-pulse`.
 
-Python modules for the daemon and the CLI (`install.sh` checks them and names the
-packages for your distribution):
+Python modules for the daemon and the CLI. The distribution packages pull them in;
+`install.sh` checks them and prints the command for your distribution:
 
-| Package (Arch)    | Import name | Why                                     |
-| ----------------- | ----------- | --------------------------------------- |
-| `python` (3.11+)  | n/a         | `tomllib` for the config                |
-| `python-dbus`     | `dbus`      | session bus: the daemon API and the OSD |
-| `python-gobject`  | `gi`        | the GLib main loop the daemon runs in   |
-| `python-pulsectl` | `pulsectl`  | stream volume through pipewire-pulse    |
+| Import name | Arch package      | Why                                     |
+| ----------- | ----------------- | --------------------------------------- |
+| `tomllib`   | `python` (3.11+)  | reads the config                        |
+| `dbus`      | `python-dbus`     | session bus: the daemon API and the OSD |
+| `gi`        | `python-gobject`  | the GLib main loop the daemon runs in   |
+| `pulsectl`  | `python-pulsectl` | stream volume through pipewire-pulse    |
 
-The window and the tray icon are optional and additionally need `pyside6`,
-`kirigami`, `qqc2-desktop-style` and `breeze-icons`. The daemon and the CLI never
-import them, so a minimal install can leave them out.
+Debian and Fedora call these `python3-dbus`, `python3-gi` (or `python3-gobject`)
+and `python3-pulsectl`.
+
+The window and the tray icon are optional and additionally need PySide6 and
+Kirigami. On Arch that is `pyside6`, `kirigami`, `qqc2-desktop-style` and
+`breeze-icons`; the `.deb` and `.rpm` packages pull the names of their
+distribution. The daemon and the CLI never import them, so a minimal install can
+leave them out.
 
 ## Install
 
-### Release archive (any distribution, no root)
+Every release carries the same three things: the pacman packages, the `.deb` and
+`.rpm` packages, and the source archive. Download the files for your system from
+the [latest release](https://github.com/YaBulochka/appvol/releases/latest) into a
+directory, `cd` there, and run the commands below. To fetch them all at once:
 
-The archive from GitHub Releases (`appvol-X.Y.Z.tar.gz`) contains the whole
-project plus `install.sh`:
+```
+mkdir appvol-pkg && cd appvol-pkg
+gh release download --repo YaBulochka/appvol
+```
+
+There are two packages. **`appvol`** is the daemon and the CLI; **`appvol-gui`** is
+the window and the tray icon, and depends on `appvol`. Install both, or only
+`appvol` for a headless install. Each block below starts the daemon with the
+session afterwards.
+
+### Arch Linux
+
+```
+sudo pacman -U appvol-*.pkg.tar.zst        # appvol and appvol-gui
+systemctl --user daemon-reload
+systemctl --user enable --now appvold
+```
+
+### Debian / Ubuntu / KDE neon
+
+```
+sudo apt install ./appvol_*.deb ./appvol-gui_*.deb
+systemctl --user daemon-reload
+systemctl --user enable --now appvold
+```
+
+### Fedora
+
+```
+sudo dnf install ./appvol-*.rpm            # appvol and appvol-gui
+systemctl --user daemon-reload
+systemctl --user enable --now appvold
+```
+
+Plasma 6 is required, which rules out Debian 12 and Ubuntu 24.04.
+
+### Verify the download (optional)
+
+`SHA256SUMS` lists every file of the release:
+
+```
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+### Any distribution, no root
+
+The `appvol-X.Y.Z.tar.gz` archive carries the whole project and `install.sh`,
+which copies it into `~/.local` and needs no package manager:
 
 ```
 tar xzf appvol-X.Y.Z.tar.gz
 cd appvol-X.Y.Z
-./install.sh --service        # into ~/.local; --uninstall reverts it
+./install.sh --service        # into ~/.local; --uninstall reverses it
 ./install.sh --no-gui         # ... without the window and the tray icon
 ```
-
-### Arch Linux
-
-Split pacman packages from the release:
-
-```
-sudo pacman -U dist/appvol-*.pkg.tar.zst          # daemon + CLI
-sudo pacman -U dist/appvol-gui-*.pkg.tar.zst      # window + tray icon
-systemctl --user daemon-reload && systemctl --user enable --now appvold
-```
-
-### Debian / Ubuntu / Fedora
-
-`.deb` and `.rpm` packages are built by the release workflow and attached to
-every GitHub Release, with the same split as the pacman packages:
-
-```
-sudo apt install ./appvol_*.deb ./appvol-gui_*.deb    # Debian, Ubuntu, KDE neon
-sudo dnf install ./appvol-*.rpm ./appvol-gui-*.rpm    # Fedora
-systemctl --user daemon-reload && systemctl --user enable --now appvold
-```
-
-`appvol` pulls `python3-dbus`, `python3-gi` (or `python3-gobject`) and
-`python3-pulsectl`; `appvol-gui` pulls PySide6 and Kirigami. Plasma 6 is
-required, which rules out Debian 12 and Ubuntu 24.04.
 
 ### From the checkout
 
@@ -101,6 +135,18 @@ Without installing anything:
 ```
 bin/appvold                # the daemon, logs to stderr
 bin/appvol up              # in another terminal
+```
+
+### Uninstall
+
+Stop the daemon first, then remove the packages (or run `./install.sh --uninstall`
+for the no-root install):
+
+```
+systemctl --user disable --now appvold
+sudo pacman -Rns appvol appvol-gui      # Arch
+sudo apt remove appvol appvol-gui       # Debian, Ubuntu
+sudo dnf remove appvol appvol-gui       # Fedora
 ```
 
 ## Hotkeys
@@ -175,12 +221,13 @@ Details in [docs/gui.md](docs/gui.md).
 step = 5                     # relative step in percent
 max_volume = 100             # upper limit, up to 150
 osd = true                   # show the KDE OSD
+osd_show_name = false        # caption the application name in the OSD
 profile_idle_timeout = 300   # seconds before a profile returns to Active, 0 disables
 # kwin_script = "/path/to/appvol.js"   # override the bundled KWin script
 ```
 
-The window writes `step` here when the step of the Active profile is changed in
-its row; the daemon leaves the rest of the file to you.
+The window writes `step` and `osd_show_name` here when they are changed in it;
+the daemon leaves the rest of the file to you.
 
 ## Troubleshooting
 
