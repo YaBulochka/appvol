@@ -5,7 +5,7 @@
 # hundred megabytes.  Splitting them keeps a headless or minimal install small.
 pkgbase=appvol
 pkgname=('appvol' 'appvol-gui')
-pkgver=0.4.0
+pkgver=0.4.1
 pkgrel=1
 arch=('any')
 url="https://github.com/YaBulochka/appvol"
