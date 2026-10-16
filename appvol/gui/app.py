@@ -19,14 +19,22 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .bridge import Bridge
+from .icons import checkout_icon_path
 
 log = logging.getLogger(__name__)
 
 QML_DIR = Path(__file__).resolve().parent / "qml"
 QML_ENTRY = QML_DIR / "Main.qml"
 
-APP_ICON = "audio-speakers"
-FALLBACK_ICON = "audio-volume-high"
+# The icons of the project, as install.sh and the packages name them in the
+# theme.  The tray wants the symbolic one, which Plasma recolours, the window
+# and the launcher the plain one.
+APP_ICON = "appvol"
+TRAY_ICON = "appvol-symbolic"
+# A theme without the project's icons yet still gets a speaker rather than
+# nothing, for the window and for the tray.
+APP_FALLBACK = "audio-speakers"
+TRAY_FALLBACK = "audio-volume-high"
 
 # Qt Quick Controls picks the Breeze styled controls of the desktop; without the
 # line the window would draw the plain Fusion style even on Plasma.
@@ -34,9 +42,31 @@ QUICK_CONTROLS_STYLE = "QT_QUICK_CONTROLS_STYLE"
 QUICK_CONTROLS_VALUE = "org.kde.desktop"
 
 
+def _icon(name: str, fallback: str) -> QIcon:
+    """A themed icon, the checkout's file for it, or a generic one.
+
+    ``bin/appvol-gui`` runs from a checkout, where the icons are not in the
+    theme yet; the file beside the sources takes over then.  A theme that has
+    neither the project's icon nor the file loaded gives the generic fallback,
+    so a missing file never keeps the window or the tray from starting.
+    """
+    icon = QIcon.fromTheme(name)
+    if not icon.isNull():
+        return icon
+    path = checkout_icon_path(name)
+    if path is not None:
+        return QIcon(str(path))
+    return QIcon.fromTheme(fallback)
+
+
 def app_icon() -> QIcon:
-    """The appvol icon from the theme, with one that always resolves."""
-    return QIcon.fromTheme(APP_ICON, QIcon.fromTheme(FALLBACK_ICON))
+    """The window icon: the plain ``appvol``."""
+    return _icon(APP_ICON, APP_FALLBACK)
+
+
+def tray_icon() -> QIcon:
+    """The tray icon: the symbolic ``appvol-symbolic``, recoloured by the theme."""
+    return _icon(TRAY_ICON, TRAY_FALLBACK)
 
 
 def themed(name: str) -> QIcon:
@@ -52,7 +82,7 @@ class Tray(QSystemTrayIcon):
     """
 
     def __init__(self, bridge: Bridge, on_open, on_quit, parent=None) -> None:
-        super().__init__(app_icon(), parent)
+        super().__init__(tray_icon(), parent)
         self.bridge = bridge
         self._on_open = on_open
         self._on_quit = on_quit

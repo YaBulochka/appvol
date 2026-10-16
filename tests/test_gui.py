@@ -18,6 +18,7 @@ from appvol.cli import IFACE as CLI_IFACE
 from appvol.cli import OBJECT_PATH as CLI_OBJECT_PATH
 from appvol.gui import client as gui_client
 from appvol.gui.client import NOT_RUNNING, Client, DaemonError
+from appvol.gui.icons import checkout_icon_path
 from appvol.profiles import action_name
 
 try:
@@ -140,6 +141,28 @@ class ConstantsTests(unittest.TestCase):
     def test_the_gui_reads_the_actions_the_daemon_registers(self) -> None:
         self.assertEqual(gui_shortcuts.COMPONENT, daemon.KGA_COMPONENT)
         self.assertEqual(gui_shortcuts.COMPONENT_FRIENDLY, daemon.KGA_COMPONENT_FRIENDLY)
+
+
+class IconFileTests(unittest.TestCase):
+    """The checkout fallback, for ``bin/appvol-gui`` without an install.
+
+    ``appvol.gui.icons`` does not import Qt, so these run without PySide6.
+    """
+
+    def test_the_plain_icon_is_in_the_checkout(self) -> None:
+        path = checkout_icon_path("appvol")
+        self.assertIsNotNone(path)
+        self.assertEqual(path.name, "appvol.svg")
+        self.assertTrue(path.is_file())
+
+    def test_the_symbolic_icon_is_in_the_checkout(self) -> None:
+        path = checkout_icon_path("appvol-symbolic")
+        self.assertIsNotNone(path)
+        self.assertEqual(path.name, "appvol-symbolic.svg")
+        self.assertTrue(path.is_file())
+
+    def test_an_unknown_name_has_no_file(self) -> None:
+        self.assertIsNone(checkout_icon_path("appvol-does-not-exist"))
 
 
 class ClientTests(unittest.TestCase):
