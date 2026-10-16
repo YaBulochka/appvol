@@ -17,6 +17,17 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-dbus python3-gi python3-pulsectl
+      - name: Run the unit tests
+        run: python3 -m unittest discover -s tests -t .
+
   tarball:
     runs-on: ubuntu-24.04
     steps:
@@ -82,7 +93,7 @@ jobs:
             dist/*.rpm
 
   publish:
-    needs: [tarball, pacman, deb-rpm]
+    needs: [test, tarball, pacman, deb-rpm]
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
