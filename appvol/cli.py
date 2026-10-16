@@ -67,6 +67,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", help="show streams, cached focus, profiles and the match result")
     sub.add_parser("apps", help="applications playing right now, with their identifiers")
 
+    mode = sub.add_parser("mode", help="cycle the profiles or the running applications")
+    mode.add_argument(
+        "mode",
+        nargs="?",
+        default="",
+        metavar="MODE",
+        help="profiles or auto (default: show the current one)",
+    )
+
     profile = sub.add_parser("profile", help="manage profiles")
     actions = profile.add_subparsers(dest="profile_command", required=True)
     actions.add_parser("list", help="show the profiles and which one is current")
@@ -158,7 +167,7 @@ def _print_list(result: dict) -> None:
     match = result.get("match", {})
     profile = result.get("profile", {})
 
-    print(f"config: step {config.get('step')}%, max {config.get('max_volume')}%, osd {config.get('osd')}")
+    print(f"config: step {config.get('step')}%, max {config.get('max_volume')}%, osd {config.get('osd')}, mode {config.get('mode')}")
     if profile.get("mode") == "focus":
         scope = "the focused window"
     else:
@@ -211,6 +220,12 @@ def _print_applications(result: dict) -> None:
             f" {application.get('id', ''):<22} {streams} stream{'' if streams == 1 else 's'}"
             f"{suffix}"
         )
+
+
+def _print_mode(result: dict) -> None:
+    mode = result.get("config", {}).get("mode", "profiles")
+    scope = "the running applications" if mode == "auto" else "the profiles of profiles.toml"
+    print(f"mode: {mode} (cycling {scope})")
 
 
 def _profile(proxy, args) -> tuple[dict, str]:
@@ -271,6 +286,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "apps":
             result = json.loads(proxy.Applications())
             kind = "apps"
+        elif args.command == "mode":
+            if args.mode:
+                result = json.loads(proxy.SetMode(str(args.mode)))
+            else:
+                result = json.loads(proxy.Profiles())
+            kind = "mode"
         elif args.command == "profile":
             result, kind = _profile(proxy, args)
         else:  # pragma: no cover - argparse enforces the set
@@ -292,6 +313,8 @@ def main(argv: list[str] | None = None) -> int:
         _print_list(result)
     elif kind == "apps":
         _print_applications(result)
+    elif kind == "mode":
+        _print_mode(result)
     elif kind == "profiles":
         _print_profiles(result)
     else:

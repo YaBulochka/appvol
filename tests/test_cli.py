@@ -6,7 +6,7 @@ import contextlib
 import io
 import unittest
 
-from appvol.cli import _print_applications, _print_profiles, _short, build_parser
+from appvol.cli import _print_applications, _print_mode, _print_profiles, _short, build_parser
 
 
 class ParserTests(unittest.TestCase):
@@ -24,6 +24,10 @@ class ParserTests(unittest.TestCase):
 
     def test_apps_takes_no_arguments(self) -> None:
         self.assertEqual(build_parser().parse_args(["apps"]).command, "apps")
+
+    def test_mode_takes_an_optional_value(self) -> None:
+        self.assertEqual(build_parser().parse_args(["mode"]).mode, "")
+        self.assertEqual(build_parser().parse_args(["mode", "auto"]).mode, "auto")
 
     def test_profile_add(self) -> None:
         args = build_parser().parse_args(
@@ -56,6 +60,13 @@ def _render_apps(result: dict) -> str:
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
         _print_applications(result)
+    return buffer.getvalue()
+
+
+def _render_mode(result: dict) -> str:
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        _print_mode(result)
     return buffer.getvalue()
 
 
@@ -144,6 +155,16 @@ class ProfileTableTests(unittest.TestCase):
     def test_no_profiles_yet_says_how_to_create_one(self) -> None:
         text = _render({"current": "active", "idle_timeout": 300.0, "profiles": []})
         self.assertIn("appvol profile add", text)
+
+
+class ModeTests(unittest.TestCase):
+    def test_the_mode_is_spelled_out(self) -> None:
+        self.assertIn("mode: auto", _render_mode({"config": {"mode": "auto"}}))
+        self.assertIn("running applications", _render_mode({"config": {"mode": "auto"}}))
+        self.assertIn("profiles.toml", _render_mode({"config": {"mode": "profiles"}}))
+
+    def test_a_payload_without_a_mode_reads_as_the_profiles(self) -> None:
+        self.assertIn("mode: profiles", _render_mode({}))
 
 
 class ApplicationTableTests(unittest.TestCase):

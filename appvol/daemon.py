@@ -1279,6 +1279,7 @@ class Daemon(dbus.service.Object):
                 "step": self.config.step,
                 "max_volume": self.config.max_volume,
                 "osd": self.config.osd,
+                "mode": self.config.mode,
                 "profile_idle_timeout": self.config.profile_idle_timeout,
             },
             "profile": profile.summary(),
