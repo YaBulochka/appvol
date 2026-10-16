@@ -1,0 +1,45 @@
+# Metadata only.  appvol is installed with install.sh or a distribution package
+# (see docs/development.md), not with pip; this file gives tooling the name, the
+# version and the entry points.  The version stays single-sourced in
+# appvol/__init__.py, so a release bumps it in one place.
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "appvol"
+description = "Volume control for the audio streams of the focused window (KDE Plasma 6 on Wayland)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "appvol contributors" }]
+dynamic = ["version"]
+dependencies = [
+    "dbus-python",
+    "PyGObject",
+    "pulsectl",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6"]
+
+[project.urls]
+Homepage = "https://github.com/YaBulochka/appvol"
+
+[project.scripts]
+appvol = "appvol.cli:main"
+appvold = "appvol.daemon:main"
+
+[project.gui-scripts]
+appvol-gui = "appvol.gui.app:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "appvol.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["appvol*"]
+
+[tool.setuptools.package-data]
+"appvol.gui" = ["qml/*.qml"]
