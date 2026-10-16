@@ -200,6 +200,13 @@ fpm_package() {
     fi
     local root="dist/pkgroot-$name"
     "$stage" "$root"
+    # Ship the real licence text, not only the fpm "License: MIT" field: Debian
+    # reads /usr/share/doc/<pkg>, rpm marks /usr/share/licenses/<pkg> as %license.
+    if [ "$fmt" = deb ]; then
+        install -Dm644 LICENSE "$root/usr/share/doc/$name/LICENSE"
+    else
+        install -Dm644 LICENSE "$root/usr/share/licenses/$name/LICENSE"
+    fi
     local args=(-s dir -t "$fmt" -n "$name" -v "$version" --iteration 1 -a "$arch"
         --force --license MIT --category sound --url "$url" --maintainer "$maintainer"
         --description "$description" -C "$root" -p "$out")
