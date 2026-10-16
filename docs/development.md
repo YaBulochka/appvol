@@ -214,12 +214,11 @@ the packages, not the Arch ones: Debian and Ubuntu split PySide6 per module and
 ship Kirigami, the desktop style and Breeze as QML packages
 (`qml6-module-org-kde-kirigami`, `qml6-module-org-kde-desktop`,
 `kf6-breeze-icon-theme`), Fedora ships PySide6 whole and prefixes the KF6
-packages (`kf6-kirigami`, `kf6-qqc2-desktop-style`, `breeze-icon-theme`). The
-Plasma 6 floor is `plasma-workspace (>= 4:6~)` for the `.deb`: Debian numbers
-that package with epoch 4, so a literal `(>= 6)` would compare 4 against 0 and
-accept Plasma 5 too. `LICENSE` is installed to `/usr/share/doc/<pkg>/` for the
-`.deb` and `/usr/share/licenses/<pkg>/` for the `.rpm`; both packages are
-`noarch`.
+packages (`kf6-kirigami`, `kf6-qqc2-desktop-style`, `breeze-icon-theme`). Plasma
+is not a dependency: appvol only makes sense in a Plasma session, but the
+packages pull only the Python modules the code imports, not the desktop.
+`LICENSE` is installed to `/usr/share/doc/<pkg>/` for the `.deb` and
+`/usr/share/licenses/<pkg>/` for the `.rpm`; both packages are `noarch`.
 
 Two details are easy to miss when editing it:
 
