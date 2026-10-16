@@ -151,7 +151,7 @@ be dispatched by hand with a tag to rebuild or backfill a release.  The unit
 tests gate every run, and a smoke job installs the built `.deb` and `.rpm` into
 `debian:13` and `fedora:latest` and runs `appvol --help` there.
 
-Published tags are immutable: `v0.5.0` and older were shipped, so they are never
+Published tags are immutable: `v0.6.0` and older were shipped, so they are never
 moved or deleted, and `main` is never force-pushed.  A mistake is fixed in a new
 patch tag, not by rewriting an old one.
 
