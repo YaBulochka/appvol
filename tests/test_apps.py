@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import unittest
 
-from appvol.apps import group_streams, identity, label_of
+from appvol.apps import (
+    application_profile,
+    group_streams,
+    identity,
+    in_appearance_order,
+    label_of,
+)
 from appvol.match import Stream
+from appvol.profiles import match_profile
 
 
 def stream(index: int, volume=(0.5, 0.5), mute: bool = False, **props: str) -> Stream:
@@ -83,6 +90,48 @@ class GroupTests(unittest.TestCase):
 
     def test_no_streams(self) -> None:
         self.assertEqual(group_streams([]), ())
+
+
+class AutoTargetTests(unittest.TestCase):
+    """The targets the auto mode builds from the applications."""
+
+    def test_a_target_names_the_application_and_prefixes_its_id(self) -> None:
+        profile = application_profile(group_streams([SPOTIFY])[0])
+
+        self.assertEqual(profile.id, "app-spotify")
+        self.assertEqual(profile.name, "Spotify")
+        self.assertEqual(profile.mode, "streams")
+        self.assertIn("spotify", profile.include)
+
+    def test_a_target_follows_the_global_step_and_ceiling(self) -> None:
+        profile = application_profile(group_streams([SPOTIFY])[0])
+
+        self.assertIsNone(profile.step)
+        self.assertIsNone(profile.max_volume)
+
+    def test_a_target_selects_the_streams_of_its_application_only(self) -> None:
+        firefox = application_profile(group_streams([FIREFOX_TAB_A, FIREFOX_TAB_B])[0])
+
+        result = match_profile(firefox, [SPOTIFY, FIREFOX_TAB_A, FIREFOX_TAB_B])
+
+        self.assertEqual(result.indices, (2, 3))
+
+    def test_the_cycle_follows_the_first_stream_not_the_label(self) -> None:
+        applications = group_streams([SPOTIFY, FIREFOX_TAB_A])
+
+        # The editor sorts by label, the cycle by the stream that started the
+        # application, and Spotify started first.
+        self.assertEqual([item.key for item in applications], ["firefox", "spotify"])
+        self.assertEqual(
+            [item.key for item in in_appearance_order(applications)], ["spotify", "firefox"]
+        )
+
+    def test_an_application_that_restarted_moves_to_the_end(self) -> None:
+        restarted = group_streams([stream(9, **SPOTIFY_PROPS), FIREFOX_TAB_A])
+
+        self.assertEqual(
+            [item.key for item in in_appearance_order(restarted)], ["firefox", "spotify"]
+        )
 
 
 if __name__ == "__main__":

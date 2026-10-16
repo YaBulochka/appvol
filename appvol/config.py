@@ -21,6 +21,13 @@ DEFAULT_MAX_VOLUME = 100.0
 HARD_MAX_VOLUME = 150.0
 DEFAULT_PROFILE_IDLE_TIMEOUT = 300.0
 
+# What the volume keys cycle through.  ``profiles`` follows ``profiles.toml``;
+# ``auto`` follows the applications that are playing right now.
+MODE_PROFILES = "profiles"
+MODE_AUTO = "auto"
+MODES = (MODE_PROFILES, MODE_AUTO)
+DEFAULT_MODE = MODE_PROFILES
+
 
 def default_path() -> Path:
     """Return the configuration path, honouring ``XDG_CONFIG_HOME``."""
@@ -34,6 +41,8 @@ class Config:
 
     ``step`` and ``max_volume`` are percentages, ``osd`` toggles the KDE OSD,
     ``osd_show_name`` decides whether the OSD captions the application name,
+    ``mode`` picks what the keys cycle: the profiles of ``profiles.toml``
+    (``profiles``) or the applications that are playing (``auto``),
     ``profile_idle_timeout`` is the number of seconds a profile may stay idle
     before the keys return to the Active profile (0 disables the return), and
     ``kwin_script`` optionally overrides the bundled KWin script location.
@@ -43,6 +52,7 @@ class Config:
     max_volume: float = DEFAULT_MAX_VOLUME
     osd: bool = True
     osd_show_name: bool = False
+    mode: str = DEFAULT_MODE
     profile_idle_timeout: float = DEFAULT_PROFILE_IDLE_TIMEOUT
     kwin_script: str | None = None
 
@@ -68,6 +78,16 @@ def _as_bool(value: object, fallback: bool) -> bool:
         return value
     log.warning("config: %r is not a boolean, using %s", value, fallback)
     return fallback
+
+
+def _as_choice(value: object, choices: tuple[str, ...], fallback: str) -> str:
+    if value is None:
+        return fallback
+    text = str(value).strip().lower()
+    if text not in choices:
+        log.warning("config: %r is not one of %s, using %r", value, ", ".join(choices), fallback)
+        return fallback
+    return text
 
 
 def parse(text: str) -> Config:
@@ -113,6 +133,7 @@ def parse(text: str) -> Config:
         max_volume=max_volume,
         osd=_as_bool(data.get("osd", config.osd), config.osd),
         osd_show_name=_as_bool(data.get("osd_show_name", config.osd_show_name), config.osd_show_name),
+        mode=_as_choice(data.get("mode"), MODES, config.mode),
         profile_idle_timeout=timeout,
         kwin_script=script,
     )
@@ -141,6 +162,7 @@ def dumps(config: Config) -> str:
         f"max_volume = {config.max_volume:g}",
         f"osd = {str(config.osd).lower()}",
         f"osd_show_name = {str(config.osd_show_name).lower()}",
+        f'mode = "{config.mode}"',
         f"profile_idle_timeout = {config.profile_idle_timeout:g}",
     ]
     if config.kwin_script:

@@ -38,8 +38,8 @@ from gi.repository import GLib, GLibUnix
 import pulsectl
 
 from . import __version__
-from .apps import group_streams
-from .config import Config, load as load_config, save as save_config
+from .apps import application_profile, group_streams, in_appearance_order
+from .config import MODE_AUTO, MODE_PROFILES, Config, load as load_config, save as save_config
 from .config import default_path as default_config_path
 from .focus import Focus, focus_from_dbus, read_parent_pid
 from .icon import resolvable, resolve as resolve_icon
@@ -442,7 +442,12 @@ class Daemon(dbus.service.Object):
     def load_profiles(self) -> None:
         """Read ``profiles.toml`` and follow the changes in KGlobalAccel."""
         self.profiles = load_profiles(self.profiles_path)
-        if find_profile(self.profiles, self.state.selection.current) is None:
+        # In the auto mode the selection points at an application, not at a file
+        # profile, so reloading the file must leave it alone.
+        if (
+            self.config.mode == MODE_PROFILES
+            and find_profile(self.profiles, self.state.selection.current) is None
+        ):
             if self.state.selection.current != ACTIVE_ID:
                 log.info("profile %s is gone, using %s", self.state.selection.current, ACTIVE_ID)
             self.state.selection.current = ACTIVE_ID
@@ -450,9 +455,51 @@ class Daemon(dbus.service.Object):
         log.debug("profiles from %s: %s",
                   self.profiles_path, ", ".join(profile.id for profile in self.profiles) or "none")
 
+    def _targets(self, streams: Sequence[Stream] | None = None) -> list[Profile]:
+        """The targets the volume keys act on, in the order they cycle.
+
+        The profiles mode follows ``profiles.toml``.  The auto mode follows the
+        applications that are playing: the list is rebuilt from the streams, in
+        the order the applications appeared, so one that stopped playing leaves
+        the list and one that started joins its end.  ``streams`` lets a caller
+        that already read a snapshot reuse it; ``None`` reads a fresh one.
+        """
+        if self.config.mode != MODE_AUTO:
+            return list(self.profiles)
+        if streams is None:
+            streams = self._read_streams()
+            if streams is None:
+                # No connection: the list is unknown, so the selection stays as
+                # it is instead of dropping an application on a transient error.
+                return []
+        targets = [
+            application_profile(application)
+            for application in in_appearance_order(
+                application for application in group_streams(streams) if not application.panel
+            )
+        ]
+        self._reconcile(targets)
+        return targets
+
+    def _read_streams(self) -> list[Stream] | None:
+        """A stream snapshot, or ``None`` when PipeWire cannot be reached."""
+        try:
+            return list(self.pulse.streams())
+        except RuntimeError as exc:
+            log.warning("cannot read the streams for the auto mode: %s", exc)
+            return None
+
+    def _reconcile(self, targets: Sequence[Profile]) -> None:
+        """Send the selection back to Active when its target is gone."""
+        current = self.state.selection.current
+        if current == ACTIVE_ID or find_profile(targets, current) is not None:
+            return
+        log.info("profile %s is gone, using %s", current, ACTIVE_ID)
+        self.state.selection.current = ACTIVE_ID
+
     def current_profile(self) -> Profile:
         """The profile the volume keys act on."""
-        profile = find_profile(self.profiles, self.state.selection.current)
+        profile = find_profile(self._targets(), self.state.selection.current)
         return profile if profile is not None else active_profile()
 
     def resync_shortcuts(self) -> None:
@@ -474,7 +521,7 @@ class Daemon(dbus.service.Object):
             self._cycle_profile(-1 if action == ACTION_PREVIOUS_PROFILE else 1)
             return
         profile_id = profile_from_action(action)
-        if not profile_id or find_profile(self.profiles, profile_id) is None:
+        if not profile_id or find_profile(self._targets(), profile_id) is None:
             log.debug("ignoring the unknown shortcut %s", action)
             return
         log.info("switching profile from the %s shortcut", action)
@@ -490,7 +537,7 @@ class Daemon(dbus.service.Object):
             return active_profile()
         if not profile_id:
             return self.current_profile()
-        profile = find_profile(self.profiles, profile_id)
+        profile = find_profile(self._targets(), profile_id)
         if profile is None:
             raise _invalid_argument(f"no such profile: {profile_id!r}")
         return profile
@@ -505,6 +552,7 @@ class Daemon(dbus.service.Object):
                 "max_volume": self.config.max_volume,
                 "osd": self.config.osd,
                 "osd_show_name": self.config.osd_show_name,
+                "mode": self.config.mode,
             },
             "profiles": [profile.summary() for profile in self.profiles],
         }
@@ -519,10 +567,11 @@ class Daemon(dbus.service.Object):
         """Switch to the next or the previous profile, with the OSD.
 
         The order is the one the window shows: the built-in Active profile first,
-        then the profiles of ``profiles.toml``.  Unlike a profile key this is a
-        plain switch, so a second press goes on instead of coming back.
+        then the profiles of ``profiles.toml``, or the applications that are
+        playing in the auto mode.  Unlike a profile key this is a plain switch, so
+        a second press goes on instead of coming back.
         """
-        order = [ACTIVE_ID, *(profile.id for profile in self.profiles)]
+        order = [ACTIVE_ID, *(profile.id for profile in self._targets())]
         try:
             index = order.index(self.state.selection.current)
         except ValueError:
@@ -558,7 +607,7 @@ class Daemon(dbus.service.Object):
         """Report what a profile looks like now, for a profile switch."""
         streams, result = self._resolve(profile)
         by_index = {stream.index: stream for stream in streams}
-        targets = [by_index[index] for index in result.indices]
+        matched_streams = [by_index[index] for index in result.indices]
         name, icon = self._appearance(profile, result, by_index)
         payload = {
             "ok": True,
@@ -571,8 +620,8 @@ class Daemon(dbus.service.Object):
             "percent": None,
             "osd": {"name": name, "icon": icon},
         }
-        if targets:
-            percent = int(round(max(peak(stream.volume) for stream in targets) * 100))
+        if matched_streams:
+            percent = int(round(max(peak(stream.volume) for stream in matched_streams) * 100))
             payload["percent"] = percent
             if profile.mode == MODE_FOCUS:
                 self._last_active = (name, icon, percent)
@@ -672,6 +721,24 @@ class Daemon(dbus.service.Object):
         log.info("osd show name: %s", show)
         return self._profiles()
 
+    def _set_mode(self, mode: str) -> dict:
+        """Choose what the keys cycle: the profiles or the running applications.
+
+        The two modes have disjoint targets, so a switch starts over on Active.
+        The choice is written to ``config.toml`` and survives a restart.
+        """
+        text = str(mode).strip().lower()
+        if text not in (MODE_PROFILES, MODE_AUTO):
+            raise _invalid_argument(
+                f"unknown mode {mode!r}: use {MODE_PROFILES!r} or {MODE_AUTO!r}"
+            )
+        if text != self.config.mode:
+            self.config = replace(self.config, mode=text)
+            save_config(self.config, self.config_path)
+            self.state.selection.current = ACTIVE_ID
+            log.info("mode: %s", text)
+        return self._profiles()
+
     # -- D-Bus API ---------------------------------------------------------
 
     @dbus.service.method(IFACE, in_signature="isss", out_signature="i")
@@ -740,6 +807,15 @@ class Daemon(dbus.service.Object):
         ``config.toml`` so it survives a restart.
         """
         return json.dumps(self._set_osd_show_name(bool(show)))
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="s")
+    def SetMode(self, mode) -> str:  # noqa: N802
+        """Cycle the profiles or the running applications, and remember the choice.
+
+        The window keeps one switch for this; the value is written to
+        ``config.toml`` so it survives a restart.
+        """
+        return json.dumps(self._set_mode(str(mode)))
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def Applications(self) -> str:  # noqa: N802
@@ -977,13 +1053,13 @@ class Daemon(dbus.service.Object):
             return payload
 
         by_index = {stream.index: stream for stream in streams}
-        targets = [by_index[index] for index in result.indices]
+        matched_streams = [by_index[index] for index in result.indices]
         # Aggregate: any audible stream means "mute everything", a fully muted
         # set means "bring it back".
-        mute = any(not stream.mute for stream in targets)
+        mute = any(not stream.mute for stream in matched_streams)
         peaks: list[float] = []
 
-        for stream in targets:
+        for stream in matched_streams:
             if stream.mute != mute:
                 self.pulse.set_mute(stream.index, mute)
             peaks.append(peak(stream.volume))
@@ -998,7 +1074,7 @@ class Daemon(dbus.service.Object):
 
         payload["muted"] = mute
         payload["percent"] = int(round(max(peaks) * 100)) if peaks else None
-        labels = ", ".join(dict.fromkeys(stream.display_name for stream in targets))
+        labels = ", ".join(dict.fromkeys(stream.display_name for stream in matched_streams))
         log.info("%s %s (streams: %s)", "muted" if mute else "unmuted", labels, result.indices)
         name, icon = self._appearance(profile, result, by_index)
         payload["osd"] = {"name": name, "icon": icon}
@@ -1141,7 +1217,7 @@ class Daemon(dbus.service.Object):
         by_index = {stream.index: stream for stream in streams} if streams else {}
         current = self.state.selection.current
         entries = []
-        for profile in (active_profile(), *self.profiles):
+        for profile in (active_profile(), *self._targets(streams)):
             entry = {
                 **profile.summary(),
                 "builtin": profile.id == ACTIVE_ID,
@@ -1153,15 +1229,19 @@ class Daemon(dbus.service.Object):
             }
             if streams is not None:
                 result = self._match(profile, streams)
-                targets = [by_index[index] for index in result.indices]
+                matched_streams = [by_index[index] for index in result.indices]
                 entry.update(
                     {
                         "matched": result.count,
                         "reason": result.reason,
-                        "percent": int(round(max(peak(stream.volume) for stream in targets) * 100))
-                        if targets
+                        "percent": int(
+                            round(max(peak(stream.volume) for stream in matched_streams) * 100)
+                        )
+                        if matched_streams
                         else None,
-                        "muted": all(stream.mute for stream in targets) if targets else None,
+                        "muted": all(stream.mute for stream in matched_streams)
+                        if matched_streams
+                        else None,
                     }
                 )
             entries.append(entry)
@@ -1175,6 +1255,7 @@ class Daemon(dbus.service.Object):
                 "max_volume": self.config.max_volume,
                 "osd": self.config.osd,
                 "osd_show_name": self.config.osd_show_name,
+                "mode": self.config.mode,
             },
             "profiles": entries,
         }

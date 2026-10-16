@@ -40,6 +40,17 @@ class ConfigTests(unittest.TestCase):
     def test_invalid_profile_idle_timeout_falls_back(self) -> None:
         self.assertEqual(parse('profile_idle_timeout = "soon"').profile_idle_timeout, 300.0)
 
+    def test_the_mode_defaults_to_the_profiles(self) -> None:
+        self.assertEqual(Config().mode, "profiles")
+
+    def test_the_mode_is_read_case_insensitively(self) -> None:
+        self.assertEqual(parse('mode = "auto"').mode, "auto")
+        self.assertEqual(parse('mode = "AUTO"').mode, "auto")
+
+    def test_an_unknown_mode_falls_back(self) -> None:
+        self.assertEqual(parse('mode = "shuffle"').mode, "profiles")
+        self.assertEqual(parse("mode = 7").mode, "profiles")
+
     def test_broken_toml_falls_back(self) -> None:
         self.assertEqual(parse("step = "), Config())
 
@@ -61,6 +72,7 @@ class ConfigWriteTests(unittest.TestCase):
         self.assertIn("step = 5", text)
         self.assertIn("max_volume = 100", text)
         self.assertIn("osd = true", text)
+        self.assertIn('mode = "profiles"', text)
         self.assertIn("profile_idle_timeout = 300", text)
 
     def test_the_kwin_script_survives(self) -> None:

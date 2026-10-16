@@ -210,7 +210,7 @@ class ShortcutDispatchTest(unittest.TestCase):
 
     def daemon_with(self, profiles=()):
         app = mock.Mock()
-        app.profiles = list(profiles)
+        app._targets.return_value = list(profiles)
         return app
 
     def test_the_volume_keys_run_the_volume_code(self) -> None:
@@ -530,6 +530,127 @@ class OsdCeilingTest(unittest.TestCase):
             app._adjust(daemon.UP, 0.0, profile)
 
             self.assertEqual(app.osd.calls[-1][-1], 120)
+
+
+SPOTIFY_STREAM = Stream(index=1, props={"application.name": "Spotify"}, volume=(0.5,))
+FIREFOX_STREAM = Stream(index=2, props={"application.name": "Firefox"}, volume=(0.5,))
+PLASMA_STREAM = Stream(index=3, props={"application.name": "plasmashell"}, volume=(0.5,))
+
+
+class AutoModeTest(unittest.TestCase):
+    """The auto mode cycles the applications that are playing, in order."""
+
+    def make(self, streams, profiles=(), config=None):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        app = StepDaemon(Path(tmp.name), profiles, config=config or Config(mode="auto"))
+        app.pulse = RecordingPulse(streams)
+        return app
+
+    def test_the_targets_are_the_playing_applications_in_order(self) -> None:
+        app = self.make([SPOTIFY_STREAM, FIREFOX_STREAM])
+
+        self.assertEqual([item.id for item in app._targets()], ["app-spotify", "app-firefox"])
+
+    def test_the_shell_is_left_out(self) -> None:
+        app = self.make([SPOTIFY_STREAM, PLASMA_STREAM])
+
+        self.assertEqual([item.id for item in app._targets()], ["app-spotify"])
+
+    def test_an_application_that_stopped_leaves_the_list(self) -> None:
+        app = self.make([SPOTIFY_STREAM, FIREFOX_STREAM])
+        app.pulse = RecordingPulse([FIREFOX_STREAM])
+
+        self.assertEqual([item.id for item in app._targets()], ["app-firefox"])
+
+    def test_a_selection_that_is_gone_falls_back_to_active(self) -> None:
+        app = self.make([SPOTIFY_STREAM, FIREFOX_STREAM])
+        app.state.selection.select("app-spotify", 0.0)
+        app.pulse = RecordingPulse([FIREFOX_STREAM])
+
+        self.assertEqual(app.current_profile().id, "active")
+        self.assertEqual(app.state.selection.current, "active")
+
+    def test_a_transient_failure_keeps_the_selection(self) -> None:
+        app = self.make([SPOTIFY_STREAM])
+        app.state.selection.select("app-spotify", 0.0)
+
+        class Failing:
+            def streams(self):
+                raise RuntimeError("no connection")
+
+        app.pulse = Failing()
+
+        self.assertEqual(app._targets(), [])
+        self.assertEqual(app.state.selection.current, "app-spotify")
+
+    def test_the_cycle_walks_the_applications_and_wraps(self) -> None:
+        app = self.make([SPOTIFY_STREAM, FIREFOX_STREAM])
+        app._feedback = mock.Mock()
+
+        visited = []
+        for _ in range(4):
+            app._cycle_profile(1)
+            visited.append(app.state.selection.current)
+
+        self.assertEqual(visited, ["app-spotify", "app-firefox", "active", "app-spotify"])
+
+    def test_an_application_target_is_resolvable(self) -> None:
+        app = self.make([SPOTIFY_STREAM])
+
+        self.assertEqual(app._profile("app-spotify").name, "Spotify")
+
+    def test_a_file_profile_is_not_reachable_in_auto_mode(self) -> None:
+        app = self.make([SPOTIFY_STREAM], profiles=[Profile(id="spotify")])
+
+        with self.assertRaises(dbus.DBusException):
+            app._profile("spotify")
+
+    def test_an_auto_target_keeps_the_global_settings(self) -> None:
+        app = self.make([SPOTIFY_STREAM])
+        app.state.selection.select("app-spotify", 0.0)
+
+        profile = app.current_profile()
+
+        self.assertIsNone(profile.step)
+        self.assertIsNone(profile.max_volume)
+
+    def test_the_overview_reports_the_mode_and_the_applications(self) -> None:
+        app = self.make([SPOTIFY_STREAM])
+
+        overview = app._overview()
+
+        self.assertEqual(overview["config"]["mode"], "auto")
+        self.assertEqual(
+            [entry["id"] for entry in overview["profiles"]], ["active", "app-spotify"]
+        )
+        self.assertEqual(overview["profiles"][1]["matched"], 1)
+
+    def test_the_profiles_mode_keeps_the_file_profiles(self) -> None:
+        app = self.make([SPOTIFY_STREAM], profiles=[Profile(id="spotify")], config=Config())
+
+        self.assertEqual([item.id for item in app._targets()], ["spotify"])
+
+    def test_switching_the_mode_writes_it_and_starts_on_active(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp), [Profile(id="spotify")])
+            app.state.selection.select("spotify", 0.0)
+
+            app._set_mode("auto")
+
+            self.assertEqual(app.config.mode, "auto")
+            self.assertEqual(app.state.selection.current, "active")
+            stored = parse_config(app.config_path.read_text(encoding="utf-8"))
+            self.assertEqual(stored.mode, "auto")
+
+    def test_an_unknown_mode_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+
+            with self.assertRaises(dbus.DBusException) as caught:
+                app._set_mode("shuffle")
+
+            self.assertEqual(caught.exception.get_dbus_name(), "org.appvol.Error.InvalidArgument")
 
 
 if __name__ == "__main__":

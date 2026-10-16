@@ -16,8 +16,13 @@ from typing import Iterable
 
 from .focus import desktop_file_stem
 from .match import STREAM_NAME_KEYS, Stream, stream_name_variants, stream_label
-from .profiles import is_panel_stream
+from .profiles import MODE_STREAMS, Profile, is_panel_stream
 from .volume import peak
+
+
+# The id of an auto-mode target carries this prefix, so an application can never
+# be taken for the built-in ``active`` profile or for one of ``profiles.toml``.
+APP_TARGET_PREFIX = "app-"
 
 
 @dataclass(frozen=True)
@@ -117,3 +122,30 @@ def group_streams(streams: Iterable[Stream]) -> tuple[Application, ...]:
 
     applications.sort(key=lambda application: (application.panel, application.label.casefold()))
     return tuple(applications)
+
+
+def application_profile(application: Application) -> Profile:
+    """A target that follows one application, for the auto mode.
+
+    ``include`` carries every identifier variant of the group, which is exactly
+    what the matcher compares, so the target selects the streams of that
+    application and of no other.  The step and the ceiling stay global: the auto
+    mode keeps no per-application settings, so there is no file to write them to.
+    """
+    return Profile(
+        id=f"{APP_TARGET_PREFIX}{application.key}",
+        name=application.label,
+        mode=MODE_STREAMS,
+        include=tuple(sorted(application.variants)),
+    )
+
+
+def in_appearance_order(applications: Iterable[Application]) -> tuple[Application, ...]:
+    """Applications ordered by their first stream, which is when they appeared.
+
+    PipeWire numbers sink inputs as it creates them, so the smallest index of a
+    group is the stream that started it.  Sorting by it puts the applications in
+    the order the user started them, and one that stopped and played again moves
+    to the end of the cycle.
+    """
+    return tuple(sorted(applications, key=lambda application: min(application.indices)))
