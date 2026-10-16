@@ -39,16 +39,16 @@ python3 -m unittest discover -s tests -t .
 | File | Covers |
 | --- | --- |
 | `tests/test_match.py` | focus to stream matching, all three steps and the refusal reasons |
-| `tests/test_apps.py` | grouping streams into applications, identity, variants, the shell flag |
+| `tests/test_apps.py` | grouping streams into applications, identity, variants, the shell flag, the auto targets |
 | `tests/test_profiles.py` | ids, profiles.toml round trip, the profile matcher, the selection and its timeout |
 | `tests/test_volume.py` | step, clamping, channel balance, absolute set, mute |
 | `tests/test_focus.py` | name normalisation, pid parsing, the `ppid` walk |
 | `tests/test_icon.py` | stream properties, theme walk, .desktop fallback |
-| `tests/test_config.py` | TOML parsing, bad values, clamping |
+| `tests/test_config.py` | TOML parsing, bad values, clamping, the mode |
 | `tests/test_cli.py` | argument parsing and the readable answers |
 | `tests/test_gui.py` | the D-Bus client, the key rendering, the QML bridge, the icon lookup (the Qt parts are skipped without PySide6) |
 | `tests/test_osd.py` | the OSD wrapper across a name owner change |
-| `tests/test_daemon.py` | KWin script lookup, the shortcut actions, their dispatch, the OSD caption |
+| `tests/test_daemon.py` | KWin script lookup, the shortcut actions, their dispatch, the OSD caption, the auto mode |
 
 No test needs a session: the ones that touch the bus use fakes, and the GUI tests
 skip themselves when PySide6 is not installed, so the suite runs on a machine
@@ -81,6 +81,11 @@ throwaway config: `appvold -v --config /tmp/appvol.toml` with
 `profile_idle_timeout = 10`. The return to Active is checked every ten seconds, so
 it happens between ten and twenty seconds after the last press, and the log says
 `profile <id> idle for 10s, back to active`.
+
+`appvol mode auto` is the other list: the keys then cycle Active and the
+applications that are playing, and the log says `mode: auto` on the switch. Start
+and stop a player while it is on to see an application join the end of the cycle
+and leave it again; `appvol mode profiles` goes back.
 
 ## The GUI in a live session
 

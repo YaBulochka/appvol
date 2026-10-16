@@ -5,7 +5,8 @@ Per-application volume control by hotkey for **KDE Plasma 6.8 (Wayland, PipeWire
 Press a key, and appvol changes the volume of every audio stream that belongs to
 the application whose window is focused, showing the stock KDE OSD. Profiles
 extend that to named targets: one key for the application of your choice, one
-for everything except it.
+for everything except it. An auto mode instead makes the volume keys cycle the
+focused window and every application that is playing.
 
 <p align="center">
   <img src="docs/images/demo.gif" alt="appvol changing the volume of the focused window, with the KDE OSD" width="720">
@@ -17,6 +18,7 @@ appvol down    # -5%
 appvol mute    # toggle mute
 appvol list    # streams, cached focus, profiles, and which match step fired
 appvol apps    # what is playing right now, with the identifiers profiles use
+appvol mode    # cycle the profiles, or the applications that are playing
 ```
 
 A user daemon on the session bus, a KWin script that reports the focused window,
@@ -200,6 +202,18 @@ name in OSD** in the window.
 and your profiles in the order the window lists them, wrapping around. Five
 minutes without a key press return the keys to the Active profile.
 
+### Auto mode
+
+The keys can instead follow the session. `appvol mode auto` — or the switch in
+the window — replaces the profiles with the applications that are playing:
+**Next profile** and **Previous profile** then walk Active and every application,
+in the order the applications started. An application that stops playing leaves
+the cycle, and one that starts joins its end. `appvol mode profiles` goes back,
+and `appvol mode` alone reports the current one.
+
+The step and the ceiling stay global in the auto mode, and `profiles.toml` is
+left untouched, so the two modes never overwrite each other.
+
 ## Window and tray icon
 
 <p align="center">
@@ -232,12 +246,13 @@ step = 5                     # relative step in percent
 max_volume = 100             # upper limit, up to 150
 osd = true                   # show the KDE OSD
 osd_show_name = false        # caption the application name in the OSD
+mode = "profiles"            # "profiles" cycles profiles.toml, "auto" the running applications
 profile_idle_timeout = 300   # seconds before a profile returns to Active, 0 disables
 # kwin_script = "/path/to/appvol.js"   # override the bundled KWin script
 ```
 
-The window writes `step` and `osd_show_name` here when they are changed in it;
-the daemon leaves the rest of the file to you.
+The window writes `step`, `osd_show_name` and `mode` here when they are changed
+in it; the daemon leaves the rest of the file to you.
 
 ## Troubleshooting
 
@@ -256,6 +271,8 @@ journalctl --user -u appvold -f    # when it runs under systemd
   See `systemctl --user status appvold`.
 - **A profile key does nothing:** the action of that profile has no key yet.
   `appvol profile add` registers the action; assign the key in System Settings.
+- **A profile key does nothing in the auto mode:** it is meant to. `appvol mode
+  profiles` goes back, and the switch in the window does the same.
 - **A profile matches nothing:** `appvol list` with the profile current shows the
   reason, and `appvol up --profile NAME` answers without switching.
 - **No OSD:** check `osd = true` and a normal Plasma session, where `plasmashell`

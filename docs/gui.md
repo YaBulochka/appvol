@@ -53,6 +53,13 @@ button on the left:
 * **Footer.** When the keys return to Active after `profile_idle_timeout`, and the
   version of the running installation.
 
+A switch above the list turns the **auto mode** on. The list then holds the
+applications that are playing instead of the profiles, and the controls that only
+make sense for a file profile disappear: **New Profile**, **Edit**, **Remove**,
+the key line and the step of a row. The built-in row keeps its step, which is the
+global one every application follows. `appvol mode` does the same from the CLI,
+and the choice is stored in `config.toml`.
+
 The window reads the whole panel with one `Overview()` call and refreshes it when
 it gains focus, when a button asks for it, and after every write. When `appvold`
 is not running, a banner says so and offers **Try Again**, and the profile list
@@ -94,7 +101,8 @@ The tray icon stays when the window is closed and closes the application only wi
 
 * **Open appvol** — the same as a left click on the icon.
 * one entry per profile, the current one ticked. Clicking switches, with the OSD,
-  so the tray answers like a key press.
+  so the tray answers like a key press. In the auto mode the entries are the
+  applications that are playing, in the order they started.
 * **Bind keys…**
 * **Volume up**, **Volume down**, **Toggle mute** — they act on the current
   profile, exactly like the three keys, OSD included.

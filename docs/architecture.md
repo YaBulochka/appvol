@@ -51,6 +51,7 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `ToggleMuteTarget(profile)` | `s -> s` | client, tray | JSON result for one profile |
 | `SetMute(profile, muted)` | `sb -> s` | window | JSON result, absolute, without the OSD |
 | `SetStep(profile, step)` | `sd -> s` | window | JSON: the profiles after the change, with the global step for Active |
+| `SetMode(mode)` | `s -> s` | client, window | JSON: the profiles after the change, `mode` written to `config.toml` |
 | `ToggleProfile(profile)` | `s -> s` | client, keys | switch the profile, answer describes the OSD |
 | `SwitchProfile(profile, osd)` | `sb -> s` | window, tray | make a profile current, the toggle without the "back" |
 | `Profiles()` | ` -> s` | client | JSON: the profiles and the current one |
@@ -156,6 +157,19 @@ include = ["spotify"]
 step = 2
 ```
 
+`config.toml` also carries `mode`, which decides what the keys cycle. The default,
+`profiles`, is the list above. `auto` replaces it with the applications that are
+playing: the daemon groups the live streams with
+[`appvol/apps.py`](../appvol/apps.py), in the order the applications appeared
+(the index of their first sink input), drops the shell and builds one target per
+application. The list is rebuilt on every read, so an application that starts
+joins the cycle and one that stops leaves it; a selection whose application is
+gone falls back to Active. An auto target carries the identifier variants the
+matcher compares, keeps the global step and ceiling, and its id is prefixed
+`app-`, so it can never be taken for the built-in profile or for one of the
+file. `profiles.toml` is not read in that mode, and a reload of it leaves the
+selection alone.
+
 The actions of the daemon are registered in KGlobalAccel at run time, in the
 component `appvol` (friendly name "Appvol", the entry System Settings shows): five
 fixed actions (volume up, volume down, toggle mute, next profile, previous profile)
@@ -193,9 +207,12 @@ The window is QML and everything around it is Python:
 
 The window reads through `Overview`, which returns every profile with its live
 percent, mute state and match count, and writes through `SetVolume`, `SetMute`,
-`SwitchProfile`, `AddProfile` and `RemoveProfile`. A slider sends one call when the
-finger lifts, not per movement, and the editor writes a profile in one piece, so
-`profiles.toml` never sees a half-finished edit.
+`SwitchProfile`, `SetMode`, `AddProfile` and `RemoveProfile`. A switch turns the
+auto mode on, and the list then holds the applications that are playing, so the
+window drops the controls that only make sense for a file profile (new, edit,
+remove, key, own step) and the tray lists the applications instead. A slider
+sends one call when the finger lifts, not per movement, and the editor writes a
+profile in one piece, so `profiles.toml` never sees a half-finished edit.
 
 The first GUI does not assign keys: it shows the binding and opens
 `systemsettings kcm_keys`, and the user binds the profile actions there. No part
@@ -235,8 +252,11 @@ maximum across the matched streams.
 (`XDG_CONFIG_HOME` is honoured). A missing file means defaults; a malformed value
 means the default for that key alone, with a warning in the log. `step` and
 `max_volume` are percentages, `max_volume` is capped at 150, `osd` toggles the
-OSD, `profile_idle_timeout` is the number of seconds before a profile returns to
-Active, and `kwin_script` overrides the script location. The command line wins over
-the file (`appvol up --step 2`, `appvold --config FILE`, `appvold --profiles FILE`,
-`appvold --kwin-script FILE`). The daemon writes the file only for the global `step`,
-when the window changes it; every other key stays the user's.
+OSD, `osd_show_name` captions the application name in it, `mode` picks what the
+keys cycle (`profiles` or `auto`), `profile_idle_timeout` is the number of
+seconds before a profile returns to Active, and `kwin_script` overrides the
+script location. The command line wins over the file (`appvol up --step 2`,
+`appvold --config FILE`, `appvold --profiles FILE`, `appvold --kwin-script
+FILE`). The daemon writes the file for the global `step`, for `osd_show_name`
+and for `mode`, when the window changes one of them; every other key stays the
+user's.
