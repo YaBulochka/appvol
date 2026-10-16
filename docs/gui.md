@@ -25,45 +25,67 @@ importable, and says so when it is not; `--no-gui` skips it in any case.
 
 ## The window
 
-The window lists the profiles, the built-in **Active window** first, then the ones
-from `profiles.toml`, each with the profile that is current marked in the radio
-button on the left:
+The window is one view at a time. A segmented control at the top switches between
+**Profiles** and **Running apps**; the choice is the same `mode` of `config.toml`
+that `appvol mode` reads and writes, and the toolbar and the list follow it.
 
-* **Name, icon and scope.** The scope line spells out what the profile covers:
-  "Only spotify", "Everything except spotify", "Every application, except the
-  shell". The line on the right counts the streams that match right now, or says
-  "nothing playing".
-* **Slider.** It shows the volume of the profile, which is the loudest of its
+The header carries the view switch, then **New profile** (in the profiles view
+only), **Refresh**, a **Bind Keys…** button and a **⋮** menu with **OSD App
+Name**, **Bind Keys…**, **Reload from File** and **About appvol**. The window
+never shows the whole settings panel; the menu keeps the header light.
+
+The built-in **Active window** is pinned in a card above the list, in both views,
+and is always visible. The card is the only place the **Step** of the volume keys
+is set — it is the global step every application follows. The radio button of the
+card marks it as the target of the keys, and its border picks up the accent when
+it is the current one.
+
+The list sits in its own area with a scrollbar; the header, the Active card and
+the footer never scroll, and the window can be made small. In the profiles view
+the section is **PROFILES**, with the number of profiles beside it; in the running
+apps view it is **RUNNING APPLICATIONS**, and its caption says that the keys cycle
+through these.
+
+A line of the list is one row: a radio button, the icon, the name with a caption,
+the volume slider, the percent, a mute button and a **⋮** menu.
+
+* **Radio, icon and name.** The radio makes the target current, exactly as a
+  profile key does. The icon is the icon of the profile or of the application.
+* **Caption.** It counts the streams that match right now — `1 stream`,
+  `3 streams`, or `nothing playing` — and, in the profiles view, names the key
+  bound to the profile: `1 stream · Meta+F9`, or `no key · Bind…`, where **Bind…**
+  opens System Settings → Shortcuts.
+* **Slider.** It shows the volume of the target, which is the loudest of its
   matched streams, the same number the OSD shows. Dragging it moves the live
-  streams, and the call is sent once, when the finger lifts. A profile with
-  nothing playing has a disabled slider, because there is nothing to change.
-* **Mute switch, Edit and Remove.** Mute is aggregate, like the hotkey: it mutes
-  everything the profile covers, and unmutes all of it when all of it is muted.
-  Edit opens the editor below, Remove asks first. Both are disabled for the
-  built-in profile.
-* **Keys.** The line under the slider shows the key bound to that profile, or
-  "No key bound". **Bind Keys…** opens System Settings → Shortcuts, where every
-  action of appvol is listed under **Appvol**. The window shows the binding but
-  never sets one.
-* **Step.** The value the volume keys move by sits in the same row, so it can be
-  changed without opening the editor. The row always shows the number the keys
-  really use, 5 % by default; the first change writes that step into the profile,
-  and the Active row writes it to `config.toml`. The editor keeps the extra option
-  of 0, "follow the global step".
-* **Footer.** When the keys return to Active after `profile_idle_timeout`, and the
-  version of the running installation.
+  streams, and the call is sent once, when the finger lifts. A target with nothing
+  playing has a disabled slider.
+* **Mute.** Mute is aggregate, like the hotkey: it mutes everything the profile
+  covers, and unmutes all of it when all of it is muted.
+* **⋮ menu.** In the profiles view it holds **Bind Keys…**, **Step…** (the step of
+  that one profile, where `0 %` follows the global step), **Edit…** and
+  **Remove**. The running-apps view drops the menu, because an application that is
+  playing cannot be edited, keyed or stepped.
 
-A switch above the list turns the **auto mode** on. The list then holds the
-applications that are playing instead of the profiles, and the controls that only
-make sense for a file profile disappear: **New Profile**, **Edit**, **Remove**,
-the key line and the step of a row. The built-in row keeps its step, which is the
-global one every application follows. `appvol mode` does the same from the CLI,
-and the choice is stored in `config.toml`.
+The row that the keys act on carries an accent bar on its left and a light tint,
+so the current target is visible at a glance; the radio button stays for changing
+it.
+
+When no profile exists yet, the profiles view shows a dashed **New profile** row
+where the list would be, and the header button does the same. When nothing is
+playing, the running-apps view says so.
+
+A one-line footer names when an idle profile returns to Active and the version of
+the running installation; the **ⓘ** beside it explains the keys and the idle
+return, the long text that used to sit in the footer. When `appvold` is not
+running, a banner says so and offers **Try Again**, and the list stays empty
+instead of pretending.
 
 The window reads the whole panel with one `Overview()` call and refreshes it when
-it gains focus, when a button asks for it, and after every write. When `appvold`
-is not running, a banner says so and offers **Try Again**, and the profile list
-stays empty instead of pretending.
+it gains focus, when a button asks for it, and after every write.
+
+A narrow window (under 480 px) drops the slider onto a second line under the
+name, hides the caption of **New profile** and the **Bind Keys…** button of the
+header, and keeps the whole thing scrollbar-free down to 380 px.
 
 ## The editor
 
@@ -83,9 +105,9 @@ stays empty instead of pretending.
 * **Step** and **Maximum volume** are per profile; a step of 0 follows
   `config.toml`, which is the value the Active row of the list edits.
 * **Icon** overrides the icon of the OSD and of the row. Whether the OSD
-  captions the application name is decided by one checkbox in the window,
-  “Show app name in OSD”, shared by every profile — it is off by default, so
-  the OSD shows the icon alone.
+  captions the application name is decided by one switch in the window, **OSD
+  App Name** in the **⋮** menu, shared by every profile — it is off by default,
+  so the OSD shows the icon alone.
 
 The editor writes the profile in one call when **Save** is pressed, so the file
 never holds half an edit, and the daemon writes it atomically.

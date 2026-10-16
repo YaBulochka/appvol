@@ -1,232 +1,220 @@
-// One profile in the list: what it covers, its live volume and its key.
+// One line of the list: a profile of profiles.toml, or an application that is
+// playing in the running-apps view.
+//
+// radio · icon · name and caption · slider · percent · mute · ⋮
+//
+// The row that the volume keys act on carries an accent bar on the left and a
+// light tint.  In a narrow window the slider drops onto a second line under the
+// name; the rest of the line stays put.
 
 import QtQuick
 import QtQuick.Controls as Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
-Kirigami.AbstractCard {
+Rectangle {
     id: card
 
     property var profile: null
 
+    /// The window accent, passed down by the window.
+    property color accentColor: Kirigami.Theme.highlightColor
+
     signal editRequested(var profile)
     signal removeRequested(var profile)
+    signal stepRequested(var profile)
 
-    readonly property bool hasVolume: profile && profile.percent !== null && profile.percent !== undefined
-    // In the auto mode the list holds the applications that are playing, not the
-    // profiles of profiles.toml: they cannot be edited, keyed or stepped.
+    readonly property bool current: profile ? !!profile.current : false
+    // In the running-apps view the list holds the applications that are playing,
+    // which cannot be edited, keyed or stepped; the row menu goes away with them.
     readonly property bool autoMode: bridge.mode === "auto"
-    readonly property int maximum: Math.max(1, Math.round(
-        (profile && profile.max_volume) || (bridge.config.max_volume) || 150))
-    readonly property real globalStep: bridge.config.step || 5
-    // A profile without a step of its own follows the global one, so the row
-    // shows the number the keys really move by and the first change writes it
-    // into the profile.
-    readonly property real stepValue: (profile && profile.step) || globalStep
+    readonly property bool narrow: width > 0 && width < 480
+    readonly property bool hasVolume: profile
+        && profile.percent !== null && profile.percent !== undefined
+    readonly property string keyText: profile && profile.key ? profile.key : ""
+    readonly property string streams: {
+        if (!profile || profile.matched === null || profile.matched === undefined) {
+            return "no connection"
+        }
+        if (profile.matched === 0) {
+            return "nothing playing"
+        }
+        return profile.matched + (profile.matched === 1 ? " stream" : " streams")
+    }
+    readonly property real indent: currentBox.implicitWidth + Kirigami.Units.smallSpacing
+        + Kirigami.Units.iconSizes.smallMedium + Kirigami.Units.smallSpacing
 
-    // The daemon is the source of truth for the volume; the slider follows it
-    // unless the user is dragging, in which case it keeps the value under the
-    // finger and sends one call when the finger lifts.
-    readonly property string scope: {
-        if (!profile) {
-            return ""
-        }
-        if (profile.builtin || profile.mode === "focus") {
-            return "Every stream of the focused window"
-        }
-        if (autoMode) {
-            return "Every stream of this application"
-        }
-        const include = profile.include || []
-        const exclude = profile.exclude || []
-        if (include.length && exclude.length) {
-            return include.join(", ") + ", but not " + exclude.join(", ")
-        }
-        if (include.length) {
-            return "Only " + include.join(", ")
-        }
-        if (exclude.length) {
-            return "Everything except " + exclude.join(", ")
-        }
-        return "Every application, except the shell"
+    radius: Kirigami.Units.cornerRadius
+    color: current
+        ? Qt.rgba(card.accentColor.r, card.accentColor.g,
+                  card.accentColor.b, 0.13)
+        : hoverArea.hovered
+            ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                      Kirigami.Theme.textColor.b, 0.06)
+            : "transparent"
+    implicitHeight: layout.implicitHeight + Kirigami.Units.largeSpacing * 2
+
+    HoverHandler {
+        id: hoverArea
     }
 
-    contentItem: ColumnLayout {
+    // The accent bar that marks the profile the volume keys act on.
+    Rectangle {
+        visible: card.current
+        width: 3
+        radius: 1.5
+        color: card.accentColor
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Kirigami.Units.smallSpacing
+        anchors.bottomMargin: Kirigami.Units.smallSpacing
+    }
+
+    ColumnLayout {
+        id: layout
+        anchors.fill: parent
+        anchors.leftMargin: Kirigami.Units.largeSpacing
+        anchors.rightMargin: Kirigami.Units.largeSpacing
+        anchors.topMargin: Kirigami.Units.largeSpacing
+        anchors.bottomMargin: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.smallSpacing
 
         RowLayout {
+            Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
             Controls.RadioButton {
                 id: currentBox
-                checked: card.profile ? !!card.profile.current : false
+                checked: card.current
                 Controls.ToolTip.visible: hovered
-                Controls.ToolTip.text: "The volume keys act on this profile"
+                Controls.ToolTip.text: "Make this the target of the volume keys"
                 onClicked: bridge.selectProfile(card.profile.id, false)
             }
 
             Kirigami.Icon {
-                source: card.profile && card.profile.icon
-                    ? card.profile.icon
-                    : (card.profile && card.profile.mode === "focus" ? "window" : "audio-volume-high")
+                source: {
+                    if (!card.profile) {
+                        return "audio-volume-high"
+                    }
+                    if (card.profile.icon) {
+                        return card.profile.icon
+                    }
+                    return card.profile.mode === "focus" ? "window" : "audio-volume-high"
+                }
                 implicitWidth: Kirigami.Units.iconSizes.smallMedium
                 implicitHeight: implicitWidth
             }
 
-            Controls.Label {
+            ColumnLayout {
                 Layout.fillWidth: true
-                text: card.profile ? (card.profile.name || card.profile.id) : ""
-                font.bold: card.profile ? !!card.profile.current : false
-                elide: Text.ElideRight
-            }
+                Layout.minimumWidth: Kirigami.Units.gridUnit * 6
+                spacing: 0
 
-            Controls.Label {
-                visible: card.hasVolume || (card.profile && card.profile.matched !== null && card.profile.matched !== undefined)
-                opacity: 0.7
-                font: Kirigami.Theme.smallFont
-                text: {
-                    if (!card.profile) {
-                        return ""
+                Controls.Label {
+                    Layout.fillWidth: true
+                    text: card.profile ? (card.profile.name || card.profile.id) : ""
+                    elide: Text.ElideRight
+                }
+
+                Controls.Label {
+                    Layout.fillWidth: true
+                    textFormat: Text.RichText
+                    font: Kirigami.Theme.smallFont
+                    opacity: 0.7
+                    text: {
+                        if (card.autoMode) {
+                            return card.streams
+                        }
+                        if (card.keyText) {
+                            return card.streams + " · " + card.keyText
+                        }
+                        return card.streams + " · no key · <a href=\"bind\">Bind…</a>"
                     }
-                    const matched = card.profile.matched
-                    if (matched === null || matched === undefined) {
-                        return "no connection"
-                    }
-                    if (matched === 0) {
-                        return "nothing playing"
-                    }
-                    return matched + (matched === 1 ? " stream" : " streams")
+                    onLinkActivated: bridge.openShortcuts()
                 }
             }
-        }
 
-        Controls.Label {
-            Layout.fillWidth: true
-            Layout.leftMargin: currentBox.width + Kirigami.Units.smallSpacing
-            text: card.scope
-            opacity: 0.7
-            elide: Text.ElideRight
-            font: Kirigami.Theme.smallFont
-        }
-
-        RowLayout {
-            spacing: Kirigami.Units.smallSpacing
-
-            Controls.Slider {
-                id: volumeSlider
-                Layout.fillWidth: true
-                Layout.leftMargin: currentBox.width + Kirigami.Units.smallSpacing
-                from: 0
-                to: card.maximum
-                enabled: card.hasVolume
-                value: card.hasVolume ? card.profile.percent : 0
-                onPressedChanged: if (!pressed && card.hasVolume) {
-                    bridge.setVolume(card.profile.id, Math.round(value))
-                }
+            VolumeSlider {
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 11
+                Layout.minimumWidth: Kirigami.Units.gridUnit * 6
+                visible: !card.narrow
+                profile: card.profile
             }
 
             Controls.Label {
                 Layout.minimumWidth: Kirigami.Units.gridUnit * 2
                 horizontalAlignment: Text.AlignRight
                 opacity: card.hasVolume ? 1 : 0.4
-                text: Math.round(volumeSlider.value) + "%"
+                text: card.hasVolume ? Math.round(card.profile.percent) + "%" : "—"
+            }
+
+            MuteButton {
+                profile: card.profile
             }
 
             Controls.ToolButton {
-                id: muteButton
-                icon.name: muteButton.checked ? "audio-volume-muted" : "audio-volume-medium"
-                checkable: true
-                enabled: card.hasVolume
-                checked: card.hasVolume && card.profile.muted === true
-                Controls.ToolTip.visible: hovered
-                Controls.ToolTip.text: checked ? "Unmute" : "Mute"
-                onClicked: bridge.setMute(card.profile.id, checked)
-            }
-
-            Controls.ToolButton {
-                icon.name: "document-edit"
+                id: menuButton
                 visible: !card.autoMode
-                enabled: card.profile && !card.profile.builtin
+                icon.name: "overflow-menu"
                 Controls.ToolTip.visible: hovered
-                Controls.ToolTip.text: "Edit this profile"
-                onClicked: card.editRequested(card.profile)
-            }
-
-            Controls.ToolButton {
-                icon.name: "edit-delete"
-                visible: !card.autoMode
-                enabled: card.profile && !card.profile.builtin
-                Controls.ToolTip.visible: hovered
-                Controls.ToolTip.text: "Remove this profile"
-                onClicked: card.removeRequested(card.profile)
+                Controls.ToolTip.text: "More actions"
+                onClicked: {
+                    rowMenu.target = card.profile
+                    rowMenu.popup()
+                }
             }
         }
 
-        RowLayout {
-            spacing: Kirigami.Units.smallSpacing
+        // The narrow window puts the slider under the name instead of beside it.
+        VolumeSlider {
+            visible: card.narrow
+            Layout.fillWidth: true
+            Layout.leftMargin: card.indent
+            profile: card.profile
+        }
+    }
 
-            // The key and the step belong to a profile of profiles.toml; in the
-            // auto mode only the built-in row keeps its step, which is the global
-            // one the applications follow.
-            visible: !card.autoMode || (card.profile ? card.profile.builtin : false)
+    // The hairline between two lines of the list.
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 1
+        color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g,
+                       Kirigami.Theme.textColor.b, 0.1)
+    }
 
-            Controls.Label {
-                Layout.leftMargin: currentBox.width + Kirigami.Units.smallSpacing
-                opacity: 0.7
-                font: Kirigami.Theme.smallFont
-                text: {
-                    if (!card.profile) {
-                        return ""
-                    }
-                    if (card.profile.builtin) {
-                        return "Reached with the volume keys"
-                    }
-                    const key = card.profile.key
-                    return key ? "Key: " + key : "No key bound"
-                }
-            }
+    Controls.Menu {
+        id: rowMenu
+        objectName: "rowMenu"
 
-            Controls.Button {
-                visible: card.profile && !card.profile.builtin
-                flat: true
-                text: "Bind Keys…"
-                onClicked: bridge.openShortcuts()
-            }
+        property var target: null
 
-            Item { Layout.fillWidth: true }
-
-            Controls.Label {
-                opacity: 0.7
-                font: Kirigami.Theme.smallFont
-                text: "Step:"
-            }
-
-            Controls.SpinBox {
-                id: stepBox
-                editable: true
-                from: 1
-                to: 50
-                value: card.stepValue
-                textFromValue: (value) => Math.round(value) + " %"
-                Controls.ToolTip.visible: hovered
-                Controls.ToolTip.text: "The volume keys move by this much"
-                onValueModified: bridge.setStep(card.profile.id, value)
-            }
+        Controls.MenuItem {
+            text: "Bind Keys…"
+            icon.name: "input-keyboard"
+            onTriggered: bridge.openShortcuts()
         }
 
-        Connections {
-            target: bridge
-            function onProfilesChanged() {
-                if (!volumeSlider.pressed) {
-                    volumeSlider.value = card.hasVolume ? card.profile.percent : 0
-                }
-                muteButton.checked = card.hasVolume && card.profile.muted === true
-                // The spin box takes its value from the daemon after every write,
-                // like the slider; assigning it drops the binding, so it is set
-                // here, on the one signal that follows a read.
-                stepBox.value = card.stepValue
-            }
+        Controls.MenuItem {
+            text: "Step…"
+            icon.name: "format-number"
+            onTriggered: card.stepRequested(rowMenu.target)
+        }
+
+        Controls.MenuItem {
+            text: "Edit…"
+            icon.name: "document-edit"
+            onTriggered: card.editRequested(rowMenu.target)
+        }
+
+        Controls.MenuSeparator {}
+
+        Controls.MenuItem {
+            text: "Remove"
+            icon.name: "edit-delete"
+            onTriggered: card.removeRequested(rowMenu.target)
         }
     }
 }
