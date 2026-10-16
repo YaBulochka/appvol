@@ -85,6 +85,10 @@ never holds half an edit, and the daemon writes it atomically.
 
 ## The tray icon
 
+The tray uses the symbolic `appvol-symbolic`, so Plasma recolours it with the
+panel; the window and the launcher use the plain `appvol`. Both come from the
+`hicolor` icon theme, which `install.sh` and the packages fill.
+
 The tray icon stays when the window is closed and closes the application only with
 **Quit**. Its menu:
 

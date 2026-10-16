@@ -15,7 +15,7 @@ appvol/daemon.py    appvold: D-Bus service, pulsectl, KWin script loader, shortc
 appvol/cli.py       appvol
 appvol/gui/         appvol-gui: D-Bus client, QML bridge, window and tray (optional)
 kwin/appvol.js      KWin script, pushes the focus
-desktop/            template of the window entry and the icon
+desktop/            the window entry template and the hicolor icons
 systemd/            template of the user unit
 packaging/          PKGBUILD (split into appvol and appvol-gui) and pacman scriptlets
 install.sh          per-user install into ~/.local, no root
@@ -46,7 +46,7 @@ python3 -m unittest discover -s tests -t .
 | `tests/test_icon.py` | stream properties, theme walk, .desktop fallback |
 | `tests/test_config.py` | TOML parsing, bad values, clamping |
 | `tests/test_cli.py` | argument parsing and the readable answers |
-| `tests/test_gui.py` | the D-Bus client, the key rendering, the QML bridge (skipped without PySide6) |
+| `tests/test_gui.py` | the D-Bus client, the key rendering, the QML bridge, the icon lookup (the Qt parts are skipped without PySide6) |
 | `tests/test_osd.py` | the OSD wrapper across a name owner change |
 | `tests/test_daemon.py` | KWin script lookup, the shortcut actions, their dispatch, the OSD caption |
 
@@ -198,8 +198,9 @@ with `sha256sums=('SKIP')` and the sum is published as the `.sha256` file.
   Plasma session packages as optional ones, and `appvol-gui` as an optional one
   too.
 * **`appvol-gui`** installs `appvol/gui/` (the Python files and the QML files
-  beside them), the `appvol-gui` launcher, the window entry and the icon under
-  `hicolor/scalable/apps`. It depends on `appvol`, `pyside6`, `kirigami`,
+  beside them), the `appvol-gui` launcher, the window entry and the `appvol` and
+  `appvol-symbolic` icons under `hicolor/scalable/apps` and
+  `hicolor/symbolic/apps`. It depends on `appvol`, `pyside6`, `kirigami`,
   `qqc2-desktop-style` and `breeze-icons`.
 
 `bin/appvol-release --deb --rpm` builds the same two packages with `fpm`. They
@@ -219,6 +220,8 @@ is not a dependency: appvol only makes sense in a Plasma session, but the
 packages pull only the Python modules the code imports, not the desktop.
 `LICENSE` is installed to `/usr/share/doc/<pkg>/` for the `.deb` and
 `/usr/share/licenses/<pkg>/` for the `.rpm`; both packages are `noarch`.
+`appvol-gui` runs `packaging/gtk-update-icon-cache.sh` after install and after
+remove, so the hicolor cache follows the icons it just placed or removed.
 
 Two details are easy to miss when editing it:
 
@@ -253,6 +256,6 @@ before `PYTHONPATH`, so an otherwise valid test can silently import the checkout
 the KWin script and the templates into `<prefix>/share/appvol`, links the
 launchers into `<prefix>/bin`, writes the substituted unit into
 `~/.config/systemd/user` and registers the shortcut entry. With PySide6 importable
-it also links `appvol-gui` and installs the window entry and the icon into the
+it also links `appvol-gui` and installs the window entry and both icons into the
 user's data directories; `--no-gui` and `--gui` force the decision either way.
 `--uninstall` reverses all of it, and the script refuses to run as root.

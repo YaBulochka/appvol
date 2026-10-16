@@ -162,6 +162,9 @@ the volume keys, plus a tray icon with the profiles, the three volume actions an
 - **Bind Keys…** opens System Settings → Shortcuts. The window shows the binding
   and never sets one.
 
+The window and the tray take their icons from the `hicolor` icon theme
+(`appvol` and `appvol-symbolic`), which `install.sh` and the packages install.
+
 Details in [docs/gui.md](docs/gui.md).
 
 ## Config
