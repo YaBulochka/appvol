@@ -109,12 +109,16 @@ jobs:
             apt-get update
             apt-get install -y /dist/appvol*.deb
             appvol --help
+            test -f /usr/share/icons/hicolor/scalable/apps/appvol.svg
+            test -f /usr/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg
           '
       - name: Smoke-test the packages on Fedora
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" fedora:latest bash -euxo pipefail -c '
             dnf install -y /dist/appvol*.rpm
             appvol --help
+            test -f /usr/share/icons/hicolor/scalable/apps/appvol.svg
+            test -f /usr/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg
           '
 
   publish:
