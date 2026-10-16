@@ -142,7 +142,13 @@ copies it into `pkgver` in `packaging/PKGBUILD`.
 The release itself is built by GitHub Actions (`.github/workflows/release.yml`).
 Pushing a `v*` tag builds every artifact and publishes the GitHub Release with
 them attached; the same workflow runs on a push to `main` to build only, and can
-be dispatched by hand with a tag to rebuild or backfill a release.
+be dispatched by hand with a tag to rebuild or backfill a release.  The unit
+tests gate every run, and a smoke job installs the built `.deb` and `.rpm` into
+`debian:13` and `fedora:latest` and runs `appvol --help` there.
+
+Published tags are immutable: `v0.4.1` and older were shipped, so they are never
+moved or deleted, and `main` is never force-pushed.  A mistake is fixed in a new
+patch tag, not by rewriting an old one.
 
 ```sh
 $EDITOR appvol/__init__.py                 # bump the version
@@ -153,14 +159,17 @@ git push origin main --tags
 
 What the workflow produces:
 
-* `appvol-<version>.tar.gz` with a `.sha256` next to it. In a git checkout it is
-  built with `git archive HEAD`, so the tree has to be clean; the script refuses
-  to run otherwise and `--allow-dirty` overrides that.
+* `appvol-<version>.tar.gz`.  In a git checkout it is built with
+  `git archive HEAD`, so the tree has to be clean; the script refuses to run
+  otherwise and `--allow-dirty` overrides that.
 * `appvol-<version>-1-any.pkg.tar.zst` and
   `appvol-gui-<version>-1-any.pkg.tar.zst`, the two pacman packages, built in an
   Arch container.
 * `appvol_<version>-1_all.deb` and `appvol-gui_<version>-1_all.deb`.
 * `appvol-<version>-1.noarch.rpm` and `appvol-gui-<version>-1.noarch.rpm`.
+* `SHA256SUMS`, computed over every file above.  `bin/appvol-release` also
+  writes a `.sha256` next to the local tarball, but the release carries the one
+  combined file.
 
 The same artifacts can be built locally with `bin/appvol-release`:
 
@@ -199,6 +208,18 @@ the desktop entry from it. A plain `/opt` tree avoids the per-distribution
 site-packages layout (Debian has `dist-packages`, Fedora `python3.X`), and the
 daemon still finds `kwin/appvol.js` next to the module. Both trees are unpacked
 from the release archive, so only tracked files reach a package.
+
+The `.deb` and `.rpm` dependencies are spelled the way each distribution names
+the packages, not the Arch ones: Debian and Ubuntu split PySide6 per module and
+ship Kirigami, the desktop style and Breeze as QML packages
+(`qml6-module-org-kde-kirigami`, `qml6-module-org-kde-desktop`,
+`kf6-breeze-icon-theme`), Fedora ships PySide6 whole and prefixes the KF6
+packages (`kf6-kirigami`, `kf6-qqc2-desktop-style`, `breeze-icon-theme`). The
+Plasma 6 floor is `plasma-workspace (>= 4:6~)` for the `.deb`: Debian numbers
+that package with epoch 4, so a literal `(>= 6)` would compare 4 against 0 and
+accept Plasma 5 too. `LICENSE` is installed to `/usr/share/doc/<pkg>/` for the
+`.deb` and `/usr/share/licenses/<pkg>/` for the `.rpm`; both packages are
+`noarch`.
 
 Two details are easy to miss when editing it:
 
