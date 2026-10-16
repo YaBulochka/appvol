@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QLocalServer, QLocalSocket, QUrl
 from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
@@ -150,6 +150,26 @@ class Tray(QSystemTrayIcon):
             self._on_open()
 
 
+# Local socket name for the single-instance check; scoped to the user so two
+# users on the same machine never collide.
+INSTANCE_SOCKET = f"appvol-gui-{os.getuid()}"
+
+
+def _tell_running_instance_to_show() -> bool:
+    """Connect to an already running GUI and ask it to show its window.
+
+    Returns True when a running instance was found and notified.
+    """
+    sock = QLocalSocket()
+    sock.connectToServer(INSTANCE_SOCKET)
+    if not sock.waitForConnected(500):
+        return False
+    sock.write(b"show")
+    sock.waitForBytesWritten(500)
+    sock.disconnectFromServer()
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the GUI; returns the process exit code."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -162,6 +182,11 @@ def main(argv: list[str] | None = None) -> int:
     app.setWindowIcon(app_icon())
     # The tray keeps the process alive, so the last window may close freely.
     app.setQuitOnLastWindowClosed(False)
+
+    # Single instance: if another GUI is already running, ask it to show its
+    # window and exit instead of opening a second one.
+    if _tell_running_instance_to_show():
+        return 0
 
     bridge = Bridge()
     engine = QQmlApplicationEngine()
@@ -177,6 +202,21 @@ def main(argv: list[str] | None = None) -> int:
         window.show()
         window.raise_()
         window.requestActivate()
+
+    # Accept "show" requests from later launches and focus the window.
+    server = QLocalServer()
+    QLocalServer.removeServer(INSTANCE_SOCKET)
+    if not server.listen(INSTANCE_SOCKET):
+        log.error("cannot listen on instance socket %s", INSTANCE_SOCKET)
+
+    def handle_connection() -> None:
+        conn = server.nextPendingConnection()
+        if conn is not None:
+            conn.waitForReadyRead(500)
+            show_window()
+            conn.disconnectFromServer()
+
+    server.newConnection.connect(handle_connection)
 
     tray = Tray(bridge, show_window, app.quit)
     if not QSystemTrayIcon.isSystemTrayAvailable():
