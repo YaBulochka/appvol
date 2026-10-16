@@ -1156,6 +1156,7 @@ class Daemon(dbus.service.Object):
                 "step": self.config.step,
                 "max_volume": self.config.max_volume,
                 "osd": self.config.osd,
+                "osd_show_name": self.config.osd_show_name,
             },
             "profiles": entries,
         }

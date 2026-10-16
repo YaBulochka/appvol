@@ -16,7 +16,7 @@ from unittest import mock
 import dbus
 
 from appvol import daemon
-from appvol.config import Config
+from appvol.config import Config, parse as parse_config
 from appvol.profiles import MODE_FOCUS, Profile, active_profile
 from appvol.profiles import parse as parse_profiles
 
@@ -420,6 +420,46 @@ class SetStepTest(unittest.TestCase):
         with self.assertRaises(dbus.DBusException):
             daemon._step(-1.0)
         self.assertEqual(daemon._step(0.0), 0.0)
+
+
+class FakePulse:
+    """A PipeWire snapshot the overview can read without a session."""
+
+    def streams(self):
+        return []
+
+
+class OsdShowNameTest(unittest.TestCase):
+    """The window reads the OSD checkbox from the overview it draws.
+
+    The window never trusts its own switch: after every write it redraws the
+    panel, so ``Overview()`` has to report ``osd_show_name`` or the checkbox
+    snaps back and can never be turned off again.
+    """
+
+    def make(self, tmp: str) -> StepDaemon:
+        app = StepDaemon(Path(tmp), [Profile(id="spotify", name="Spotify")])
+        app.pulse = FakePulse()
+        return app
+
+    def test_the_overview_reports_the_checkbox(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+
+            self.assertFalse(app._overview()["config"]["osd_show_name"])
+
+            app._set_osd_show_name(True)
+
+            self.assertTrue(app._overview()["config"]["osd_show_name"])
+
+    def test_the_checkbox_is_written_to_config_toml(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+
+            app._set_osd_show_name(True)
+
+            stored = parse_config(app.config_path.read_text(encoding="utf-8"))
+            self.assertTrue(stored.osd_show_name)
 
 
 if __name__ == "__main__":

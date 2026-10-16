@@ -40,7 +40,7 @@ OVERVIEW = {
     "ok": True,
     "current": "spotify",
     "idle_timeout": 300.0,
-    "config": {"step": 5.0, "max_volume": 150.0, "osd": True},
+    "config": {"step": 5.0, "max_volume": 150.0, "osd": True, "osd_show_name": False},
     "profiles": [
         {
             "id": "active",
@@ -355,6 +355,19 @@ class BridgeTests(unittest.TestCase):
         name, args = self.proxy.calls[0]
         self.assertEqual(name, "SetStep")
         self.assertEqual(args[0], "active")
+
+    def test_the_osd_checkbox_follows_the_overview(self) -> None:
+        overview = {**OVERVIEW, "config": {**OVERVIEW["config"], "osd_show_name": True}}
+        bridge = self.make({"Overview": overview, "Applications": APPLICATIONS})
+        bridge.refresh()
+        self.assertTrue(bridge.osdShowName)
+
+    def test_toggling_the_osd_checkbox_writes_it(self) -> None:
+        bridge = self.make()
+        bridge.setOsdShowName(True)
+        name, args = self.proxy.calls[0]
+        self.assertEqual(name, "SetOsdShowName")
+        self.assertEqual(bool(args[0]), True)
 
     def test_saving_a_profile_passes_the_lists_through(self) -> None:
         bridge = self.make()
