@@ -626,12 +626,20 @@ class Daemon(dbus.service.Object):
             if profile.mode == MODE_FOCUS:
                 self._last_active = (name, icon, percent)
             if osd:
-                self.osd.volume_changed(
-                    percent,
-                    icon=icon,
-                    name=osd_caption(self.config.osd_show_name, name),
-                    maximum=self._max_percent_of(profile),
-                )
+                caption = osd_caption(self.config.osd_show_name, name)
+                maximum = self._max_percent_of(profile)
+                if any(stream.mute for stream in matched_streams):
+                    # A muted stream keeps its volume level, so a bar would
+                    # show a volume the application does not actually have.
+                    # Zero makes Plasma render "<name> Muted" instead.
+                    self.osd.volume_changed(0, icon=icon, name=caption, maximum=maximum)
+                else:
+                    self.osd.volume_changed(
+                        percent,
+                        icon=icon,
+                        name=caption,
+                        maximum=maximum,
+                    )
         elif profile.mode == MODE_FOCUS:
             log.info("nothing to show for %s: %s", profile.id, result.reason)
         elif osd:
@@ -1024,12 +1032,20 @@ class Daemon(dbus.service.Object):
             log.debug("osd: %s%% with icon %r (app %r)", payload["percent"], icon, name)
             if profile.mode == MODE_FOCUS:
                 self._last_active = (name, icon, payload["percent"] or 0)
-            self.osd.volume_changed(
-                payload["percent"],
-                icon=icon,
-                name=osd_caption(self.config.osd_show_name, name),
-                maximum=self._max_percent_of(profile),
-            )
+            matched_streams = [by_index[index] for index in result.indices]
+            caption = osd_caption(self.config.osd_show_name, name)
+            maximum = self._max_percent_of(profile)
+            if any(stream.mute for stream in matched_streams):
+                # A muted stream keeps its volume level: zero makes Plasma
+                # render "<name> Muted" instead of a bar the app does not have.
+                self.osd.volume_changed(0, icon=icon, name=caption, maximum=maximum)
+            else:
+                self.osd.volume_changed(
+                    payload["percent"],
+                    icon=icon,
+                    name=caption,
+                    maximum=maximum,
+                )
         return payload
 
     def _toggle_mute(self, profile: Profile | None = None) -> dict:

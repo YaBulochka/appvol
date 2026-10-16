@@ -1,3 +1,9 @@
+# appvol 0.6.1 (2026-10-16)
+
+## Fixed
+
+- OSD: when switching to an application whose streams are muted, the OSD now shows "<name> Muted" (or plain "Muted") instead of its last volume level. The same applies when changing the volume of a muted application: Plasma renders the muted caption instead of a progress bar the app does not actually have.
+
 # appvol 0.6.0 (2026-10-16)
 
 ## Window redesign
