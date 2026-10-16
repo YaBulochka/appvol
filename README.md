@@ -81,9 +81,18 @@ systemctl --user daemon-reload && systemctl --user enable --now appvold
 
 ### Debian / Ubuntu / Fedora
 
-`.deb` and `.rpm` are not built by the release script yet. They can be made from
-the same tarball with `fpm` or `checkinstall` if you need them. Note that Plasma 6
-is required, which rules out Debian 12 and Ubuntu 24.04.
+`.deb` and `.rpm` packages are built by the release workflow and attached to
+every GitHub Release, with the same split as the pacman packages:
+
+```
+sudo apt install ./appvol_*.deb ./appvol-gui_*.deb    # Debian, Ubuntu, KDE neon
+sudo dnf install ./appvol-*.rpm ./appvol-gui-*.rpm    # Fedora
+systemctl --user daemon-reload && systemctl --user enable --now appvold
+```
+
+`appvol` pulls `python3-dbus`, `python3-gi` (or `python3-gobject`) and
+`python3-pulsectl`; `appvol-gui` pulls PySide6 and Kirigami. Plasma 6 is
+required, which rules out Debian 12 and Ubuntu 24.04.
 
 ### From the checkout
 
@@ -122,7 +131,7 @@ appvol up --profile spotify     # one call, without switching to it
 its last part, so `firefox` finds `org.mozilla.firefox`. An empty `--include`
 means every application stream with the shell left out, and `--exclude` removes
 applications, which is how an inversion profile is built. `--step`,
-`--max-volume`, `--icon` and `--osd-name` override the config for that profile.
+`--max-volume` and `--icon` override the config for that profile.
 Profiles live in `~/.config/appvol/profiles.toml`, written by the daemon.
 
 The daemon registers one action per profile in KGlobalAccel, so every profile

@@ -139,24 +139,39 @@ spectacle -b -n -a -o /tmp/appvol.png      # -a: the active window only
 The version lives in one place, `appvol/__init__.py`, and `bin/appvol-release`
 copies it into `pkgver` in `packaging/PKGBUILD`.
 
+The release itself is built by GitHub Actions (`.github/workflows/release.yml`).
+Pushing a `v*` tag builds every artifact and publishes the GitHub Release with
+them attached; the same workflow runs on a push to `main` to build only, and can
+be dispatched by hand with a tag to rebuild or backfill a release.
+
 ```sh
-$EDITOR appvol/__init__.py         # bump the version
-bin/appvol-release --package       # archive and package (from HEAD in a git checkout)
-git tag -a v0.1.0 -m "appvol 0.1.0" && git push --tags
+$EDITOR appvol/__init__.py                 # bump the version
+git commit -am "release: version X.Y.Z"
+git tag -a vX.Y.Z -m "appvol X.Y.Z"
+git push origin main --tags
 ```
 
-What comes out:
+What the workflow produces:
 
-* `dist/appvol-<version>.tar.gz` with a `.sha256` next to it. In a git checkout
-  it is built with `git archive HEAD`, so the tree has to be clean; the script
-  refuses to run otherwise and `--allow-dirty` overrides that.
-* `packaging/appvol-<version>.tar.gz`, the same archive, because the package is
-  built from it.
-* `dist/appvol-<version>-1-any.pkg.tar.zst` and
-  `dist/appvol-gui-<version>-1-any.pkg.tar.zst`, the two pacman packages.
+* `appvol-<version>.tar.gz` with a `.sha256` next to it. In a git checkout it is
+  built with `git archive HEAD`, so the tree has to be clean; the script refuses
+  to run otherwise and `--allow-dirty` overrides that.
+* `appvol-<version>-1-any.pkg.tar.zst` and
+  `appvol-gui-<version>-1-any.pkg.tar.zst`, the two pacman packages, built in an
+  Arch container.
+* `appvol_<version>-1_all.deb` and `appvol-gui_<version>-1_all.deb`.
+* `appvol-<version>-1.noarch.rpm` and `appvol-gui-<version>-1.noarch.rpm`.
 
-The script also checks that the archive contains the files the package needs, and
-tells you whether HEAD carries the matching tag.
+The same artifacts can be built locally with `bin/appvol-release`:
+
+```sh
+bin/appvol-release --package     # the pacman packages (needs makepkg)
+bin/appvol-release --deb --rpm   # the .deb and .rpm packages (needs fpm)
+```
+
+`packaging/appvol-<version>.tar.gz` holds the same archive, because the pacman
+package is built from it. The script checks that the archive contains the files
+the packages need, and tells you whether HEAD carries the matching tag.
 
 The checksum is deliberately absent from `PKGBUILD`: the archive contains that
 same `PKGBUILD`, so no sum written inside it could describe it. `makepkg` runs
@@ -177,6 +192,13 @@ with `sha256sums=('SKIP')` and the sum is published as the `.sha256` file.
   beside them), the `appvol-gui` launcher, the window entry and the icon under
   `hicolor/scalable/apps`. It depends on `appvol`, `pyside6`, `kirigami`,
   `qqc2-desktop-style` and `breeze-icons`.
+
+`bin/appvol-release --deb --rpm` builds the same two packages with `fpm`. They
+install the project into `/opt/appvol` and link the launchers, the user unit and
+the desktop entry from it. A plain `/opt` tree avoids the per-distribution
+site-packages layout (Debian has `dist-packages`, Fedora `python3.X`), and the
+daemon still finds `kwin/appvol.js` next to the module. Both trees are unpacked
+from the release archive, so only tracked files reach a package.
 
 Two details are easy to miss when editing it:
 
