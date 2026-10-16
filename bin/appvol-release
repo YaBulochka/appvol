@@ -68,7 +68,8 @@ for required in \
     "appvol-$version/appvol/gui/qml/Main.qml" \
     "appvol-$version/kwin/appvol.js" \
     "appvol-$version/desktop/org.appvol.gui.desktop.in" \
-    "appvol-$version/desktop/appvol.svg" \
+    "appvol-$version/desktop/icons/hicolor/scalable/apps/appvol.svg" \
+    "appvol-$version/desktop/icons/hicolor/symbolic/apps/appvol-symbolic.svg" \
     "appvol-$version/systemd/appvold.service.in" \
     "appvol-$version/install.sh" \
     "appvol-$version/packaging/PKGBUILD" \
@@ -161,6 +162,9 @@ _stage_core() {
     cp -r "$_src" "$root/opt/appvol"
     rm -rf "$root/opt/appvol/appvol/gui" "$root/opt/appvol/bin/appvol-gui"
     rm -f "$root/opt/appvol/bin/appvol-release"
+    # desktop/ holds the window entry and its icons: appvol-gui's business, and
+    # the core package installs no icon into the theme.
+    rm -rf "$root/opt/appvol/desktop"
     sed 's|@APPVOLD@|/opt/appvol/bin/appvold|' \
         "$root/opt/appvol/systemd/appvold.service.in" \
         >"$root/usr/lib/systemd/user/appvold.service"
@@ -173,20 +177,25 @@ _stage_gui() {
     rm -rf "$root"
     mkdir -p "$root/opt/appvol/appvol" "$root/opt/appvol/bin" \
         "$root/usr/bin" "$root/usr/share/applications" \
-        "$root/usr/share/icons/hicolor/scalable/apps"
+        "$root/usr/share/icons/hicolor/scalable/apps" \
+        "$root/usr/share/icons/hicolor/symbolic/apps"
     cp -r "$_src/appvol/gui" "$root/opt/appvol/appvol/gui"
     cp "$_src/bin/appvol-gui" "$root/opt/appvol/bin/appvol-gui"
     sed 's|@APPVOL_GUI@|/opt/appvol/bin/appvol-gui|g' \
         "$_src/desktop/org.appvol.gui.desktop.in" \
         >"$root/usr/share/applications/org.appvol.gui.desktop"
-    cp "$_src/desktop/appvol.svg" "$root/usr/share/icons/hicolor/scalable/apps/appvol.svg"
+    # The app icon the desktop entry names, and the symbolic one for the tray.
+    cp "$_src/desktop/icons/hicolor/scalable/apps/appvol.svg" \
+        "$root/usr/share/icons/hicolor/scalable/apps/appvol.svg"
+    cp "$_src/desktop/icons/hicolor/symbolic/apps/appvol-symbolic.svg" \
+        "$root/usr/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg"
     ln -sf /opt/appvol/bin/appvol-gui "$root/usr/bin/appvol-gui"
 }
 
-# fpm_package <deb|rpm> <name> <stage-function> [dependency ...]
+# fpm_package <deb|rpm> <name> <stage-function> <icons: yes|no> [dependency ...]
 fpm_package() {
-    local fmt="$1" name="$2" stage="$3"
-    shift 3
+    local fmt="$1" name="$2" stage="$3" icons="$4"
+    shift 4
     if ! command -v fpm >/dev/null 2>&1; then
         echo "appvol-release: --$fmt needs fpm (gem install fpm, or ruby-fpm on Arch)" >&2
         exit 1
@@ -211,6 +220,12 @@ fpm_package() {
     local args=(-s dir -t "$fmt" -n "$name" -v "$version" --iteration 1 -a "$arch"
         --force --license MIT --category sound --url "$url" --maintainer "$maintainer"
         --description "$description" -C "$root" -p "$out")
+    # Only appvol-gui carries icons, so only it refreshes the theme cache.
+    if [ "$icons" = yes ]; then
+        local hook
+        hook="$(readlink -f packaging/gtk-update-icon-cache.sh)"
+        args+=(--after-install "$hook" --after-remove "$hook")
+    fi
     local dep
     for dep in "$@"; do
         args+=(--depends "$dep")
@@ -228,17 +243,17 @@ fpm_package() {
 if [ "$with_deb" = yes ] || [ "$with_rpm" = yes ]; then
     prep_src
     if [ "$with_deb" = yes ]; then
-        fpm_package deb appvol _stage_core \
+        fpm_package deb appvol _stage_core no \
             python3 python3-dbus python3-gi python3-pulsectl
-        fpm_package deb appvol-gui _stage_gui \
+        fpm_package deb appvol-gui _stage_gui yes \
             appvol python3-pyside6.qtwidgets python3-pyside6.qtqml \
             qml6-module-org-kde-kirigami qml6-module-org-kde-desktop \
             kf6-breeze-icon-theme
     fi
     if [ "$with_rpm" = yes ]; then
-        fpm_package rpm appvol _stage_core \
+        fpm_package rpm appvol _stage_core no \
             python3 python3-dbus python3-gobject python3-pulsectl
-        fpm_package rpm appvol-gui _stage_gui \
+        fpm_package rpm appvol-gui _stage_gui yes \
             appvol python3-pyside6 kf6-kirigami kf6-qqc2-desktop-style \
             breeze-icon-theme
     fi
