@@ -205,6 +205,17 @@ systemctl --user daemon-reload
 systemctl --user enable --now appvold
 ```
 
+The same split package is in the AUR, so a helper can fetch and build it:
+
+```
+yay -S appvol appvol-gui                   # or paru
+systemctl --user daemon-reload
+systemctl --user enable --now appvold
+```
+
+Both AUR packages come from the one package base `appvol` and build from the
+release archive. Leave out `appvol-gui` for a headless install.
+
 ### Debian / Ubuntu / KDE neon
 
 ```
