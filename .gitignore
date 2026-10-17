@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 
+# setuptools writes this next to the package when it is installed in place.
+*.egg-info/
+
 # bin/appvol-release writes both of these.
 dist/
 packaging/*.tar.gz
