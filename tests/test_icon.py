@@ -110,6 +110,7 @@ class IconTestCase(unittest.TestCase):
         icon.application_dirs.cache_clear()
         icon._theme_icon_names.cache_clear()
         icon._theme_subdirectories.cache_clear()
+        icon._has_icon.cache_clear()
         icon.theme_chain.cache_clear()
 
     @staticmethod
@@ -303,6 +304,15 @@ class MergedThemeRootsTests(IconTestCase):
     def test_the_listing_covers_every_root(self) -> None:
         names = icon.theme_icon_names("testtheme", [self.icons, self._user_root()], [self.pixmaps])
         self.assertIn("steam_icon_730", names)
+
+
+class IconCacheTests(IconTestCase):
+    """A name the theme does not know is the expensive case, so it is cached."""
+
+    def test_a_repeated_lookup_does_not_walk_the_theme_again(self) -> None:
+        self.assertFalse(icon.has_icon("no-such-icon", "testtheme", [self.icons], ()))
+        with mock.patch("pathlib.Path.is_file", side_effect=AssertionError("walked the theme")):
+            self.assertFalse(icon.has_icon("no-such-icon", "testtheme", [self.icons], ()))
 
 
 class ConfigurationTests(IconTestCase):

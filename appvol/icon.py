@@ -262,15 +262,37 @@ def has_icon(
     if "/" in name:
         return False
 
-    theme = theme or icon_theme()
-    roots = tuple(roots) if roots is not None else icon_roots()
-    for candidate_theme in theme_chain(theme, roots):
-        for directory in _theme_subdirectories(candidate_theme, roots):
+    return _has_icon(
+        name,
+        theme or icon_theme(),
+        tuple(roots) if roots is not None else None,
+        tuple(pixmaps) if pixmaps is not None else None,
+    )
+
+
+@lru_cache(maxsize=4096)
+def _has_icon(
+    name: str,
+    theme: str,
+    roots: tuple[Path, ...] | None,
+    pixmaps: tuple[Path, ...] | None,
+) -> bool:
+    """``has_icon`` behind a cache.
+
+    One lookup walks every directory of the theme chain, hundreds of ``stat``
+    calls for a name the theme does not know.  The panel asks for the same
+    handful of stream values on every overview, and the window polls for it, so
+    the answer is worth remembering.  Like the other theme caches, it lives for
+    the session: installing a theme mid-session is the one case it misses.
+    """
+    theme_roots = roots if roots is not None else icon_roots()
+    for candidate_theme in theme_chain(theme, theme_roots):
+        for directory in _theme_subdirectories(candidate_theme, theme_roots):
             for suffix in ICON_SUFFIXES:
                 if (directory / f"{name}{suffix}").is_file():
                     return True
 
-    for directory in tuple(pixmaps) if pixmaps is not None else pixmap_dirs():
+    for directory in pixmaps if pixmaps is not None else pixmap_dirs():
         for suffix in ICON_SUFFIXES:
             if (directory / f"{name}{suffix}").is_file():
                 return True
