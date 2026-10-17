@@ -1,3 +1,25 @@
+# appvol 0.7.1 (2026-10-17)
+
+## Added
+
+- The window re-reads the panel twice a second while it is on screen, so the
+  sliders follow the volume keys and any other application that moves the same
+  streams without pressing **Refresh**. An idle poll rebuilds nothing and draws
+  nothing, and the window stops polling when it is hidden.
+
+## Changed
+
+- **Step** accepts fractional values: the field takes `2.5 %`, typed with a dot or
+  a comma, and the buttons next to it move by half a percent. `config.toml` and a
+  profile's `step` in `profiles.toml` already held a float, so no file changes.
+
+## Fixed
+
+- Icon lookup is cached. Resolving the icon of a stream walked the whole icon
+  theme for every name the theme does not know, over a hundred milliseconds per
+  overview with a handful of profiles and streams. Reading the panel now costs
+  well under a millisecond.
+
 # appvol 0.7.0 (2026-10-17)
 
 ## Changed
