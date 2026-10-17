@@ -66,6 +66,10 @@ appvol appears in **System Settings → Shortcuts** while the daemon runs, under
 the entry **Appvol**, next to the other applications. Nothing has to be installed
 or regenerated for it.
 
+<p align="center">
+  <img src="docs/images/hotkeys.png" alt="System Settings → Shortcuts with Appvol selected: Volume up, Volume down, Toggle mute, Next profile and Previous profile, each with its key, and one entry per profile" width="640">
+</p>
+
 Bind **Volume up**, **Volume down**, **Toggle mute**, **Next profile** and
 **Previous profile**. No keys are bound by default, and keyboard shortcuts stay
 in System Settings; appvol never writes one.
