@@ -1,11 +1,11 @@
 # Maintainer: appvol contributors
 #
 # Two packages from one source: the daemon and the CLI need neither Qt nor a
-# display, while the window and the tray icon pull PySide6 and (with it) a few
-# hundred megabytes.  Splitting them keeps a headless or minimal install small.
+# display, while the window pulls PySide6 and (with it) a few hundred megabytes.
+# Splitting them keeps a headless or minimal install small.
 pkgbase=appvol
 pkgname=('appvol' 'appvol-gui')
-pkgver=0.6.0
+pkgver=0.7.0
 pkgrel=1
 arch=('any')
 url="https://github.com/YaBulochka/appvol"
@@ -33,7 +33,7 @@ package_appvol() {
         'kwin: loads the script that reports the focused window'
         'kglobalacceld: binds the hotkeys in System Settings -> Shortcuts'
         'pipewire-pulse: the audio server the daemon talks to'
-        'appvol-gui: the window and the tray icon for the profiles'
+        'appvol-gui: the window for the profiles'
     )
     install=appvol.install
 
@@ -68,7 +68,7 @@ package_appvol() {
 }
 
 package_appvol-gui() {
-    pkgdesc="Window and tray icon for appvol (PySide6 and Kirigami)"
+    pkgdesc="Window for appvol (PySide6 and Kirigami)"
     depends=('appvol' 'pyside6' 'kirigami' 'qqc2-desktop-style' 'breeze-icons')
     optdepends=('plasma-desktop: the desktop whose shortcut dialog the window opens')
 
@@ -91,13 +91,10 @@ package_appvol-gui() {
     sed 's|@APPVOL_GUI@|/usr/bin/appvol-gui|g' desktop/org.appvol.gui.desktop.in \
         >"$pkgdir/usr/share/applications/org.appvol.gui.desktop"
 
-    # The app icon the entry names and the symbolic one for the tray.  The
-    # hicolor cache is refreshed by the gtk-update-icon-cache pacman hook, so
-    # nothing extra is needed here.
+    # The app icon the entry names.  The hicolor cache is refreshed by the
+    # gtk-update-icon-cache pacman hook, so nothing extra is needed here.
     install -Dm644 desktop/icons/hicolor/scalable/apps/appvol.svg \
         "$pkgdir/usr/share/icons/hicolor/scalable/apps/appvol.svg"
-    install -Dm644 desktop/icons/hicolor/symbolic/apps/appvol-symbolic.svg \
-        "$pkgdir/usr/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg"
 
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
