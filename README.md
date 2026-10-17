@@ -132,8 +132,11 @@ hotkeys keep running.
 - The sliders and the mute buttons act on the live streams.
 - The **⋮** menu of a row holds **Bind Keys…**, **Step…**, **Edit…** and
   **Remove**; the step of the pinned Active card is the global one.
-- **New profile** and **Edit…** open a form whose application list is what is
-  playing right now.
+- **New profile** and **Edit…** open a dialog. A profile covers either the
+  applications you name or every application except the ones you name, so an
+  **Applies to** switch says which reading the list of chips has; what is playing
+  is one click away, and a live **Matches now** line names what the draft would
+  catch before you save it. The identifier is derived from the name as you type.
 - **Bind Keys…** opens System Settings → Shortcuts. The window shows the binding
   and never sets one.
 
