@@ -85,7 +85,7 @@ appvol up --profile spotify     # one call, without switching to it
 ```
 
 <p align="center">
-  <img src="docs/images/profile.png" alt="The appvol window in the profiles view: the pinned Active window card, then one line per profile with its live volume, its matched streams and its bound key" width="640">
+  <img src="docs/images/profile.png" alt="The appvol window with the editor of a profile open: the Name field, the Applies to switch, the chips of the applications it covers, what is playing now, what the profile matches at the moment, the step and the maximum volume, and the icon; behind it, one line per profile" width="640">
 </p>
 
 `--include` takes application identifiers; the reverse-DNS name also matches by
@@ -120,7 +120,7 @@ and `appvol mode` alone reports the current one.
 The step and the ceiling stay global in the auto mode, and `profiles.toml` is
 left untouched, so the two modes never overwrite each other.
 
-## The window
+## GUI
 
 `appvol-gui` (or `bin/appvol-gui` from the checkout) opens a small window over the
 profiles: the built-in **Active window** pinned at the top, then one line per
