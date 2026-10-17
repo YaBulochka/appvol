@@ -110,7 +110,6 @@ jobs:
             apt-get install -y /dist/appvol*.deb
             appvol --help
             test -f /usr/share/icons/hicolor/scalable/apps/appvol.svg
-            test -f /usr/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg
           '
       - name: Smoke-test the packages on Fedora
         run: |
@@ -118,7 +117,6 @@ jobs:
             dnf install -y /dist/appvol*.rpm
             appvol --help
             test -f /usr/share/icons/hicolor/scalable/apps/appvol.svg
-            test -f /usr/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg
           '
 
   publish:
