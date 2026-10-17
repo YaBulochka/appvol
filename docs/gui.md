@@ -1,7 +1,7 @@
-# Window and Tray Icon
+# The Window
 
-`appvol-gui` is the optional front end of appvol: a small window for the profiles
-and a tray icon for the quick switches. It is a client of the daemon, like the
+`appvol-gui` is the optional front end of appvol: a small window for the profiles.
+It is a client of the daemon, like the
 CLI, so it never touches PipeWire, KWin or `profiles.toml` itself.
 
 ```
@@ -14,10 +14,10 @@ python3 -m appvol.gui                   # the module directly
 
 | Package (Arch) | Why |
 | --- | --- |
-| `pyside6` | Qt 6 for Python: the window, the tray, the QML engine |
+| `pyside6` | Qt 6 for Python: the window and the QML engine |
 | `kirigami` | the KDE QML components the window is built from |
 | `qqc2-desktop-style` | draws the controls in the Breeze style |
-| `breeze-icons` | the icons used by the rows and the tray menu |
+| `breeze-icons` | the icons used by the rows and the window |
 
 The daemon and the CLI need none of them, which is why Arch gets two packages:
 `appvol` and `appvol-gui`. `install.sh` installs the GUI part only when PySide6 is
@@ -83,6 +83,9 @@ instead of pretending.
 The window reads the whole panel with one `Overview()` call and refreshes it when
 it gains focus, when a button asks for it, and after every write.
 
+Closing the window quits the GUI. The daemon and the hotkeys run on their own, so
+nothing else stops: open the window to change a setting, close it to leave.
+
 A narrow window (under 480 px) drops the slider onto a second line under the
 name, hides the caption of **New profile** and the **Bind Keys…** button of the
 header, and keeps the whole thing scrollbar-free down to 380 px.
@@ -104,31 +107,20 @@ header, and keeps the whole thing scrollbar-free down to 380 px.
   profile into "everything except this".
 * **Step** and **Maximum volume** are per profile; a step of 0 follows
   `config.toml`, which is the value the Active row of the list edits.
-* **Icon** overrides the icon of the OSD and of the row. Whether the OSD
-  captions the application name is decided by one switch in the window, **OSD
-  App Name** in the **⋮** menu, shared by every profile — it is off by default,
-  so the OSD shows the icon alone.
+* **Icon** opens a grid of the theme's icons with a search box, to override the
+  icon of the OSD and of the row; **Automatic** clears the choice. Left
+  automatic, a profile shows the icon of the application it names: the first
+  **Include**, or, for an exclude profile, the first **Exclude**. The button
+  previews that icon while the sheet is open, so it follows the first application
+  added. Steam game icons are ordinary theme icons there
+  (`steam_icon_<appid>`, written by Steam into `hicolor`), so the search box finds
+  them by appid even though no `.desktop` file maps the identifier to them.
+  Whether the OSD captions the application name is decided by one switch in the
+  window, **OSD App Name** in the **⋮** menu, shared by every profile — it is off
+  by default, so the OSD shows the icon alone.
 
 The editor writes the profile in one call when **Save** is pressed, so the file
 never holds half an edit, and the daemon writes it atomically.
-
-## The tray icon
-
-The tray uses the symbolic `appvol-symbolic`, so Plasma recolours it with the
-panel; the window and the launcher use the plain `appvol`. Both come from the
-`hicolor` icon theme, which `install.sh` and the packages fill.
-
-The tray icon stays when the window is closed and closes the application only with
-**Quit**. Its menu:
-
-* **Open appvol** — the same as a left click on the icon.
-* one entry per profile, the current one ticked. Clicking switches, with the OSD,
-  so the tray answers like a key press. In the auto mode the entries are the
-  applications that are playing, in the order they started.
-* **Bind keys…**
-* **Volume up**, **Volume down**, **Toggle mute** — they act on the current
-  profile, exactly like the three keys, OSD included.
-* **Quit**.
 
 ## What is not here
 

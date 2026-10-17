@@ -4,7 +4,7 @@
 #   ./install.sh                # install or upgrade into ~/.local
 #   ./install.sh --service      # ... and start the daemon with the session
 #   ./install.sh --prefix DIR   # install into DIR instead of ~/.local
-#   ./install.sh --no-gui       # skip the window and the tray icon
+#   ./install.sh --no-gui       # skip the window
 #   ./install.sh --uninstall    # remove what this script installed
 #   ./install.sh --help
 #
@@ -24,11 +24,10 @@
 # daemon, so they appear in System Settings while it runs and no desktop file is
 # installed for them.
 #
-# With PySide6 installed it also adds the window and the tray icon:
+# With PySide6 installed it also adds the window:
 #
 #   ~/.local/share/applications/org.appvol.gui.desktop
 #   ~/.local/share/icons/hicolor/scalable/apps/appvol.svg
-#   ~/.local/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg
 #
 # Nothing outside those paths is touched, and no root privileges are needed.
 # Arch users may prefer the pacman package instead: see packaging/PKGBUILD.
@@ -46,10 +45,9 @@ install_dir="$prefix/share/appvol"
 unit="$config_home/systemd/user/appvold.service"
 gui_entry="$data_home/applications/org.appvol.gui.desktop"
 gui_icon="$prefix/share/icons/hicolor/scalable/apps/appvol.svg"
-gui_symbolic="$prefix/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg"
 
 usage() {
-    sed -n '2,34p' "$self" | sed 's/^# \{0,1\}//'
+    sed -n '2,33p' "$self" | sed 's/^# \{0,1\}//'
     echo
     echo "Options: --service  --prefix DIR  --no-gui  --uninstall  --help"
 }
@@ -90,8 +88,8 @@ missing_modules() {
     done
 }
 
-# The window and the tray icon need PySide6; the daemon and the CLI do not, so a
-# missing PySide6 is not a failure, only a note at the end.
+# The window needs PySide6; the daemon and the CLI do not, so a missing PySide6
+# is not a failure, only a note at the end.
 want_gui() {
     case "$with_gui" in
         yes) return 0 ;;
@@ -140,7 +138,7 @@ uninstall() {
     for name in appvol appvold appvol-gui; do
         rm -f "$destdir$prefix/bin/$name"
     done
-    rm -f "$destdir$gui_entry" "$destdir$gui_icon" "$destdir$gui_symbolic"
+    rm -f "$destdir$gui_entry" "$destdir$gui_icon"
     rm -rf "$destdir$install_dir"
     # Only succeeds when nothing else lives there.
     rmdir "$destdir$prefix/bin" "$destdir$prefix/share" 2>/dev/null || true
@@ -212,16 +210,13 @@ if want_gui; then
     install -d "$destdir$(dirname "$gui_entry")"
     sed "s|@APPVOL_GUI@|$install_dir/bin/appvol-gui|g" \
         "$root/desktop/org.appvol.gui.desktop.in" >"$destdir$gui_entry"
-    # The app icon belongs with the desktop entry; the tray icon is symbolic, so
-    # Plasma recolours it with the rest of the panel.
+    # The app icon belongs with the desktop entry.
     install -Dm644 "$root/desktop/icons/hicolor/scalable/apps/appvol.svg" \
         "$destdir$gui_icon"
-    install -Dm644 "$root/desktop/icons/hicolor/symbolic/apps/appvol-symbolic.svg" \
-        "$destdir$gui_symbolic"
     update_icon_cache "$prefix/share/icons/hicolor"
-    echo "appvol: window and tray icon installed (appvol-gui)"
+    echo "appvol: window installed (appvol-gui)"
 elif [ "$with_gui" = auto ]; then
-    echo "appvol: note: PySide6 is missing, so the window and the tray icon were skipped"
+    echo "appvol: note: PySide6 is missing, so the window was skipped"
     echo "        install it (Arch: sudo pacman -S pyside6) and run this script again"
 fi
 

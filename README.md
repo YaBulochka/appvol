@@ -42,8 +42,7 @@ appvol mode    # show the mode; "appvol mode auto" or "appvol mode profiles" swi
 ```
 
 A user daemon on the session bus, a KWin script that reports the focused window,
-and a thin client for the hotkeys. The window and the tray icon come with the
-`appvol-gui` package.
+and a thin client for the hotkeys. The window comes with the `appvol-gui` package.
 
 ## Quick start
 
@@ -121,14 +120,14 @@ and `appvol mode` alone reports the current one.
 The step and the ceiling stay global in the auto mode, and `profiles.toml` is
 left untouched, so the two modes never overwrite each other.
 
-## Window and tray icon
+## The window
 
 `appvol-gui` (or `bin/appvol-gui` from the checkout) opens a small window over the
 profiles: the built-in **Active window** pinned at the top, then one line per
 profile with its live volume, the streams it matches, the key bound to it, its
 mute button and a **⋮** menu. A segmented control switches between **Profiles**
-and **Running apps**, and a tray icon carries the profiles, the three volume
-actions and **Quit**.
+and **Running apps**. Closing the window quits the GUI; the daemon and the
+hotkeys keep running.
 
 - The sliders and the mute buttons act on the live streams.
 - The **⋮** menu of a row holds **Bind Keys…**, **Step…**, **Edit…** and
@@ -156,7 +155,7 @@ these Python modules by hand, and prints the command for your distribution:
 | `gi`        | `python-gobject`  | `python3-gi`       | `python3-gobject`  |
 | `pulsectl`  | `python-pulsectl` | `python3-pulsectl` | `python3-pulsectl` |
 
-The window and the tray icon are optional and add PySide6 and Kirigami
+The window is optional and adds PySide6 and Kirigami
 (`pyside6`, `kirigami`, `qqc2-desktop-style` and `breeze-icons` on Arch). The
 daemon and the CLI never import them, so a minimal install can leave them out.
 
@@ -171,8 +170,8 @@ mkdir appvol-pkg && cd appvol-pkg
 gh release download --repo YaBulochka/appvol
 ```
 
-**`appvol`** is the daemon and the CLI, **`appvol-gui`** the window and the tray
-icon, which depends on `appvol`. Install both, or only `appvol` for a headless
+**`appvol`** is the daemon and the CLI, **`appvol-gui`** the window, which depends
+on `appvol`. Install both, or only `appvol` for a headless
 install. Each block below starts the daemon with the session afterwards.
 
 The files of a release (`X.Y.Z` is its version):
@@ -232,7 +231,7 @@ which copies it into `~/.local` and needs no package manager:
 tar xzf appvol-X.Y.Z.tar.gz
 cd appvol-X.Y.Z
 ./install.sh --service        # into ~/.local; --uninstall reverses it
-./install.sh --no-gui         # ... without the window and the tray icon
+./install.sh --no-gui         # ... without the window
 ```
 
 ### From the checkout
@@ -260,7 +259,7 @@ sudo dnf remove appvol appvol-gui       # Fedora
 
 - [docs/config.md](docs/config.md): every key of `config.toml`
 - [docs/troubleshooting.md](docs/troubleshooting.md): when a key does nothing
-- [docs/gui.md](docs/gui.md): the window and the tray icon
+- [docs/gui.md](docs/gui.md): the window
 - [docs/architecture.md](docs/architecture.md): components, D-Bus API, matching, lifecycle
 - [docs/osd.md](docs/osd.md): the OSD and how the application icon is chosen
 - [docs/plasma-notes.md](docs/plasma-notes.md): what Plasma actually does

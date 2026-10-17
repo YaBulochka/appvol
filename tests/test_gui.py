@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest import mock
 
 import dbus
 
@@ -25,11 +26,13 @@ try:
     import PySide6  # noqa: F401
 
     from appvol.gui import shortcuts as gui_shortcuts
+    from appvol.gui import bridge as gui_bridge
     from appvol.gui.bridge import Bridge
 
     HAVE_QT = True
 except ImportError:  # pragma: no cover - depends on the machine
     gui_shortcuts = None
+    gui_bridge = None
     Bridge = None
     HAVE_QT = False
 
@@ -155,12 +158,6 @@ class IconFileTests(unittest.TestCase):
         self.assertEqual(path.name, "appvol.svg")
         self.assertTrue(path.is_file())
 
-    def test_the_symbolic_icon_is_in_the_checkout(self) -> None:
-        path = checkout_icon_path("appvol-symbolic")
-        self.assertIsNotNone(path)
-        self.assertEqual(path.name, "appvol-symbolic.svg")
-        self.assertTrue(path.is_file())
-
     def test_an_unknown_name_has_no_file(self) -> None:
         self.assertIsNone(checkout_icon_path("appvol-does-not-exist"))
 
@@ -243,15 +240,6 @@ class ClientTests(unittest.TestCase):
         name, args = proxy.calls[0]
         self.assertEqual(name, "SwitchProfile")
         self.assertEqual(list(args), ["spotify", True])
-
-    def test_adjust_talks_about_the_current_profile(self) -> None:
-        proxy = FakeProxy()
-        client = Client(connect=lambda: proxy)
-        client.adjust("up")
-        name, args = proxy.calls[0]
-        self.assertEqual(name, "AdjustTarget")
-        self.assertEqual(args[0], "")
-        self.assertEqual(args[1], "up")
 
     def test_set_mode_sends_the_mode(self) -> None:
         proxy = FakeProxy()
@@ -343,6 +331,37 @@ class BridgeTests(unittest.TestCase):
         name, args = self.proxy.calls[0]
         self.assertEqual(name, "SetVolume")
         self.assertEqual(args[0], "spotify")
+
+    def test_the_icon_search_filters_the_theme_and_honours_the_limit(self) -> None:
+        bridge = self.make()
+        with mock.patch.object(
+            gui_bridge, "theme_icon_names", return_value=("firefox", "firefox-nightly", "spotify")
+        ):
+            self.assertEqual(bridge.searchIcons("firefox", 10), ["firefox", "firefox-nightly"])
+            self.assertEqual(bridge.searchIcons("", 2), ["firefox", "firefox-nightly"])
+            self.assertEqual(bridge.searchIcons("nothing", 10), [])
+
+    def test_the_automatic_icon_is_the_first_application_of_the_profile(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.assertEqual(bridge.profileIcon(["spotify"], []), "spotify")
+        self.assertEqual(bridge.profileIcon([], ["spotify"]), "spotify")
+        self.assertEqual(bridge.profileIcon(["spotify"], ["firefox"]), "spotify")
+
+    def test_the_automatic_icon_of_an_empty_profile_is_empty(self) -> None:
+        bridge = self.make()
+        self.assertEqual(bridge.profileIcon([], []), "")
+
+    def test_the_automatic_icon_falls_back_to_the_desktop_file(self) -> None:
+        bridge = self.make()
+        with mock.patch.object(gui_bridge, "resolve_icon", return_value="utilities-terminal") as resolve:
+            self.assertEqual(bridge.profileIcon(["org.kde.konsole"], []), "utilities-terminal")
+        resolve.assert_called_once_with(desktop_file_name="org.kde.konsole")
+
+    def test_the_automatic_icon_of_an_unknown_name_is_empty(self) -> None:
+        bridge = self.make()
+        with mock.patch.object(gui_bridge, "resolve_icon", return_value=None):
+            self.assertEqual(bridge.profileIcon(["nope"], []), "")
 
     def test_a_step_change_is_written_and_the_panel_is_read_again(self) -> None:
         bridge = self.make()

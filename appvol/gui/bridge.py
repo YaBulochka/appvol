@@ -1,4 +1,4 @@
-"""The QML bridge: the properties and slots the window and the tray use.
+"""The QML bridge: the properties and slots the window uses.
 
 Everything the QML side can do lands here, and every call ends up in
 :class:`appvol.gui.client.Client`.  Keeping the logic in Python leaves the QML
@@ -14,6 +14,7 @@ from typing import Any, Callable
 from PySide6.QtCore import Property, QObject, QProcess, Signal, Slot
 
 from .. import __version__
+from ..icon import resolve as resolve_icon, theme_icon_names
 from ..profiles import ACTIVE_ID, action_name
 from .client import NOT_RUNNING, Client, DaemonError
 from .shortcuts import ShortcutKeys
@@ -122,7 +123,7 @@ class Bridge(QObject):
         """Make a profile current.
 
         The window passes ``osd=False``, because it shows the change itself; the
-        tray passes ``True``, so a switch from the menu answers like a key press.
+        flag stays for a caller that wants the OSD feedback of a key press.
         """
         self._write(self.client.switch_profile, str(profile_id), bool(osd))
 
@@ -188,15 +189,37 @@ class Bridge(QObject):
         """Read ``profiles.toml`` again, after a hand edit."""
         self._write(self.client.reload)
 
-    @Slot(str)
-    def adjust(self, direction: str) -> None:
-        """One step on the current profile, from the tray, with the OSD."""
-        self._write(self.client.adjust, str(direction))
+    @Slot(str, int, result="QVariantList")
+    def searchIcons(self, query: str, limit: int = 240) -> list:
+        """Icon names of the theme that contain ``query``, for the editor's picker."""
+        names = theme_icon_names()
+        needle = str(query).strip().lower()
+        if needle:
+            names = tuple(name for name in names if needle in name.lower())
+        if limit > 0:
+            names = names[:limit]
+        return list(names)
 
-    @Slot()
-    def toggleMute(self) -> None:
-        """Toggle mute on the current profile, from the tray, with the OSD."""
-        self._write(self.client.toggle_mute)
+    @Slot("QVariantList", "QVariantList", result=str)
+    def profileIcon(self, include: list, exclude: list) -> str:
+        """The automatic icon of a draft profile: its first include, else exclude.
+
+        The editor shows this while no icon is chosen, so the button previews
+        what the daemon resolves once the profile is saved.  A playing
+        application answers with its own icon; a name that is not playing falls
+        back to the ``.desktop`` file of the identifier.
+        """
+        first = ""
+        if include:
+            first = str(include[0])
+        elif exclude:
+            first = str(exclude[0])
+        if not first:
+            return ""
+        for application in self._applications:
+            if str(application.get("id") or "") == first:
+                return str(application.get("icon") or "")
+        return resolve_icon(desktop_file_name=first) or ""
 
     @Slot()
     def openShortcuts(self) -> None:

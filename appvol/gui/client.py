@@ -1,6 +1,6 @@
 """The D-Bus side of the GUI.
 
-Every read and every write of the window and the tray goes through
+Every read and every write of the window goes through
 ``org.appvol.Daemon``, so the daemon stays the only writer of ``profiles.toml``
 and the only component that talks to PipeWire and KWin.  The calls live in one
 class with an injectable connection, which keeps them testable without a session
@@ -104,14 +104,6 @@ class Client:
     def set_step(self, profile_id: str, percent: float) -> dict:
         """Set the step of a profile; the built-in id sets the global step."""
         return self.call("SetStep", str(profile_id), dbus.Double(float(percent)))
-
-    def adjust(self, direction: str, step: float = 0.0) -> dict:
-        """One step up or down on the current profile, with the OSD."""
-        return self.call("AdjustTarget", "", str(direction), dbus.Double(float(step)))
-
-    def toggle_mute(self, profile_id: str = "") -> dict:
-        """Toggle mute, with the OSD."""
-        return self.call("ToggleMuteTarget", str(profile_id))
 
     def set_osd_show_name(self, show: bool) -> dict:
         """Show or hide the application name in the OSD, for every profile."""

@@ -20,6 +20,11 @@ Kirigami.OverlaySheet {
     property string draftIcon: ""
     property string draftOsd: "auto"
 
+    // The icon "Automatic" stands for: the first application the profile covers,
+    // resolved the way the daemon draws it on the OSD.
+    readonly property string automaticIcon:
+        bridge.profileIcon(includeList, excludeList) || "audio-volume-high"
+
     // Which list the application picker appends to.
     property string target: "include"
 
@@ -225,20 +230,24 @@ Kirigami.OverlaySheet {
             RowLayout {
                 Kirigami.FormData.label: "Icon:"
                 Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
 
-                Controls.TextField {
-                    id: iconField
+                Controls.Button {
                     Layout.fillWidth: true
-                    Layout.minimumWidth: Kirigami.Units.gridUnit * 10
-                    text: sheet.draftIcon
-                    placeholderText: "the icon of the application"
-                    onTextEdited: sheet.draftIcon = text
+                    text: sheet.draftIcon.length > 0 ? sheet.draftIcon : "Automatic"
+                    icon.name: sheet.draftIcon.length > 0 ? sheet.draftIcon : sheet.automaticIcon
+                    onClicked: {
+                        iconPicker.selected = sheet.draftIcon
+                        iconPicker.openFor()
+                    }
                 }
 
-                Kirigami.Icon {
-                    source: sheet.draftIcon || "audio-volume-high"
-                    implicitWidth: Kirigami.Units.iconSizes.smallMedium
-                    implicitHeight: implicitWidth
+                Controls.Button {
+                    visible: sheet.draftIcon.length > 0
+                    icon.name: "edit-clear"
+                    Controls.ToolTip.visible: hovered
+                    Controls.ToolTip.text: "Back to the automatic icon"
+                    onClicked: sheet.draftIcon = ""
                 }
             }
 
@@ -254,6 +263,11 @@ Kirigami.OverlaySheet {
     ApplicationPicker {
         id: picker
         onChosen: (identifier) => sheet.addApplication(identifier)
+    }
+
+    IconPicker {
+        id: iconPicker
+        onChosen: (name) => sheet.draftIcon = name
     }
 }
 }

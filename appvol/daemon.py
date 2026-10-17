@@ -834,8 +834,8 @@ class Daemon(dbus.service.Object):
     def SwitchProfile(self, profile_id, osd) -> str:  # noqa: N802
         """Make ``profile_id`` current, without the toggle the keys do.
 
-        ``osd`` asks for the OSD feedback: the tray wants it, a window that shows
-        the change already does not need it.
+        ``osd`` asks for the OSD feedback: a caller outside the window wants it, a
+        window that shows the change already does not need it.
         """
         return json.dumps(self._switch_profile(str(profile_id), bool(osd)))
 
@@ -919,8 +919,8 @@ class Daemon(dbus.service.Object):
         ``osd_name`` and decided in :func:`osd_caption`.
 
         A stream profile carries its own name, and its icon comes from the
-        ``icon`` key, from the matched stream or from the ``.desktop`` file of
-        the first entry of ``include``.
+        ``icon`` key, from the first ``include`` entry, or, when the profile only
+        excludes applications, from the first ``exclude`` entry.
         """
         if profile.mode != MODE_FOCUS:
             name = profile.display_name if self.config.osd_show_name else ""
@@ -947,13 +947,26 @@ class Daemon(dbus.service.Object):
         return name, icon or ""
 
     def _profile_icon(self, profile: Profile, result: MatchResult, by_index: dict[int, Stream]) -> str:
-        """Icon for a stream profile: its own, the streams', or a volume icon."""
+        """Icon for a stream profile: its own, the included, the excluded, or a volume icon.
+
+        The properties of one matched stream describe one application.  That is
+        useful for an ``include`` profile, which selects that application, but
+        meaningless for a profile that selects many: an ``exclude`` profile would
+        otherwise show an arbitrary application that happens to be playing.  So
+        the stream properties are only consulted when ``include`` names the
+        target; an ``exclude`` profile falls back to the first excluded
+        application instead.
+        """
         if profile.icon:
             if resolvable(profile.icon):
                 return profile.icon
             log.warning("icon %r of profile %s is not in the icon theme", profile.icon, profile.id)
-        props = by_index[result.indices[0]].props if result.indices else {}
-        hint = profile.include[0] if profile.include else ""
+        if profile.include:
+            props = by_index[result.indices[0]].props if result.indices else {}
+            hint = profile.include[0]
+        else:
+            props = {}
+            hint = profile.exclude[0] if profile.exclude else ""
         return resolve_icon(desktop_file_name=hint, props=props) or PROFILE_FALLBACK_ICON
 
     def _step_of(self, profile: Profile, step_percent: float) -> float:

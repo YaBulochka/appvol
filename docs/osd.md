@@ -60,9 +60,11 @@ stay empty. A profile that matches nothing answers `no stream` instead of stayin
 silent, because a profile key press is an explicit action on a target the user
 chose.
 
-A profile has three icon sources, in this order: its own `icon` key, when the
-theme can render it; the matched stream, through the same chain as below; and the
-`.desktop` file of the first entry of `include`. When all three come up empty the
+A profile takes its icon from, in this order: its own `icon` key, when the theme
+can render it; the matched stream, through the same chain as below, when the
+profile has an `include`; and the `.desktop` file of the target identifier. The
+target is the first `include` entry, or, for a profile that only excludes
+applications, the first `exclude` entry. When all of them come up empty the
 generic volume icon is used, so the caption is never left without an icon.
 
 ## Where the icon comes from
@@ -102,9 +104,14 @@ segment after a dash, so `spotify-launcher` resolves to `spotify`. appvol
 therefore walks the theme itself
 ([`appvol/icon.py`](../appvol/icon.py)): the theme name is read from
 `kdeglobals` (`[Icons] Theme=`), then the theme, its `Inherits` chain and
-`hicolor` are searched, along with `XDG_*_DIRS/pixmaps`. The name is also tried
-without the last dash segment. Results are cached for the lifetime of the daemon,
-so repeated key presses never touch the disk.
+`hicolor` are searched, along with `XDG_*_DIRS/pixmaps`. A theme is the merge of
+its installs over the XDG roots, so a name added under `~/.local/share/icons` is
+found even when the theme itself lives in `/usr/share` and the user root carries
+no `index.theme` of its own — this is how the Steam game icons
+(`hicolor/<size>/apps/steam_icon_<appid>.png`) become visible to the daemon and to
+the window's icon picker. The name is also tried without the last dash segment.
+Results are cached for the lifetime of the daemon, so repeated key presses never
+touch the disk.
 
 The walk was compared against `kiconfinder6` for 17 names with no differences.
 On a Cool-Dark-Icons desktop this yields `spotify` for `spotify-launcher`,

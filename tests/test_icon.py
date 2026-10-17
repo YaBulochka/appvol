@@ -108,6 +108,9 @@ class IconTestCase(unittest.TestCase):
         icon.icon_roots.cache_clear()
         icon.pixmap_dirs.cache_clear()
         icon.application_dirs.cache_clear()
+        icon._theme_icon_names.cache_clear()
+        icon._theme_subdirectories.cache_clear()
+        icon.theme_chain.cache_clear()
 
     @staticmethod
     def _touch(path: Path) -> Path:
@@ -264,6 +267,42 @@ class ResolveTests(IconTestCase):
 
     def test_nothing_known(self) -> None:
         self.assertIsNone(self.resolve())
+
+
+class ThemeListingTests(IconTestCase):
+    """The names an icon chooser offers, across the whole theme chain."""
+
+    def test_lists_every_name_of_the_chain(self) -> None:
+        names = icon.theme_icon_names("testtheme", [self.icons], [self.pixmaps])
+        self.assertIn("spotify", names)  # the main theme
+        self.assertIn("utilities-terminal", names)
+        self.assertIn("small", names)
+        self.assertIn("spotify-launcher", names)  # inherited hicolor
+        self.assertIn("pixicon", names)  # unthemed pixmaps
+
+    def test_the_names_are_sorted_and_unique(self) -> None:
+        names = icon.theme_icon_names("testtheme", [self.icons], [self.pixmaps])
+        self.assertEqual(list(names), sorted(set(names)))
+
+
+class MergedThemeRootsTests(IconTestCase):
+    """A theme is the merge of its installs across the XDG roots."""
+
+    def _user_root(self) -> Path:
+        # A user root extends an installed theme without an index.theme of its
+        # own, which is how Steam adds hicolor/<size>/apps/steam_icon_<appid>.png.
+        user = self.tmp / "user-icons"
+        self._touch(user / "hicolor/256x256/apps/steam_icon_730.png")
+        return user
+
+    def test_an_icon_added_by_a_second_root_is_found(self) -> None:
+        roots = [self.icons, self._user_root()]
+        self.assertTrue(icon.has_icon("steam_icon_730", "testtheme", roots, ()))
+        self.assertTrue(icon.resolvable("steam_icon_730", "testtheme", roots, ()))
+
+    def test_the_listing_covers_every_root(self) -> None:
+        names = icon.theme_icon_names("testtheme", [self.icons, self._user_root()], [self.pixmaps])
+        self.assertIn("steam_icon_730", names)
 
 
 class ConfigurationTests(IconTestCase):

@@ -69,7 +69,6 @@ for required in \
     "appvol-$version/kwin/appvol.js" \
     "appvol-$version/desktop/org.appvol.gui.desktop.in" \
     "appvol-$version/desktop/icons/hicolor/scalable/apps/appvol.svg" \
-    "appvol-$version/desktop/icons/hicolor/symbolic/apps/appvol-symbolic.svg" \
     "appvol-$version/systemd/appvold.service.in" \
     "appvol-$version/install.sh" \
     "appvol-$version/packaging/PKGBUILD" \
@@ -121,7 +120,7 @@ fi
 
 # .deb and .rpm need fpm, which builds both formats in one go.  The packages
 # mirror the pacman split: appvol carries the daemon and the CLI, appvol-gui the
-# window and the tray icon, so a machine without Qt stays small.
+# window, so a machine without Qt stays small.
 #
 # The project lands in /opt/appvol and the launchers, the unit and the desktop
 # entry point into it with absolute paths: systemd and kglobalacceld do not read
@@ -177,18 +176,15 @@ _stage_gui() {
     rm -rf "$root"
     mkdir -p "$root/opt/appvol/appvol" "$root/opt/appvol/bin" \
         "$root/usr/bin" "$root/usr/share/applications" \
-        "$root/usr/share/icons/hicolor/scalable/apps" \
-        "$root/usr/share/icons/hicolor/symbolic/apps"
+        "$root/usr/share/icons/hicolor/scalable/apps"
     cp -r "$_src/appvol/gui" "$root/opt/appvol/appvol/gui"
     cp "$_src/bin/appvol-gui" "$root/opt/appvol/bin/appvol-gui"
     sed 's|@APPVOL_GUI@|/opt/appvol/bin/appvol-gui|g' \
         "$_src/desktop/org.appvol.gui.desktop.in" \
         >"$root/usr/share/applications/org.appvol.gui.desktop"
-    # The app icon the desktop entry names, and the symbolic one for the tray.
+    # The app icon the desktop entry names.
     cp "$_src/desktop/icons/hicolor/scalable/apps/appvol.svg" \
         "$root/usr/share/icons/hicolor/scalable/apps/appvol.svg"
-    cp "$_src/desktop/icons/hicolor/symbolic/apps/appvol-symbolic.svg" \
-        "$root/usr/share/icons/hicolor/symbolic/apps/appvol-symbolic.svg"
     ln -sf /opt/appvol/bin/appvol-gui "$root/usr/bin/appvol-gui"
 }
 

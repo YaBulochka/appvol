@@ -20,8 +20,8 @@ Kirigami.ApplicationWindow {
     minimumWidth: 380
     minimumHeight: Kirigami.Units.gridUnit * 18
 
-    // A hotkey or the tray may change the volume while the window is open, so
-    // every time the window comes back to the front the panel is read again.
+    // A hotkey may change the volume while the window is open, so every time
+    // the window comes back to the front the panel is read again.
     onActiveChanged: if (active) bridge.refresh()
 
     readonly property var activeProfile: {

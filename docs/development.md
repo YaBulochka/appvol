@@ -13,7 +13,7 @@ appvol/osd.py       KDE OSD over D-Bus
 appvol/config.py    config.toml
 appvol/daemon.py    appvold: D-Bus service, pulsectl, KWin script loader, shortcuts
 appvol/cli.py       appvol
-appvol/gui/         appvol-gui: D-Bus client, QML bridge, window and tray (optional)
+appvol/gui/         appvol-gui: D-Bus client, QML bridge, window (optional)
 kwin/appvol.js      KWin script, pushes the focus
 desktop/            the window entry template and the hicolor icons
 systemd/            template of the user unit
@@ -203,10 +203,9 @@ with `sha256sums=('SKIP')` and the sum is published as the `.sha256` file.
   Plasma session packages as optional ones, and `appvol-gui` as an optional one
   too.
 * **`appvol-gui`** installs `appvol/gui/` (the Python files and the QML files
-  beside them), the `appvol-gui` launcher, the window entry and the `appvol` and
-  `appvol-symbolic` icons under `hicolor/scalable/apps` and
-  `hicolor/symbolic/apps`. It depends on `appvol`, `pyside6`, `kirigami`,
-  `qqc2-desktop-style` and `breeze-icons`.
+  beside them), the `appvol-gui` launcher, the window entry and the `appvol`
+  icon under `hicolor/scalable/apps`. It depends on `appvol`, `pyside6`,
+  `kirigami`, `qqc2-desktop-style` and `breeze-icons`.
 
 `bin/appvol-release --deb --rpm` builds the same two packages with `fpm`. They
 install the project into `/opt/appvol` and link the launchers, the user unit and

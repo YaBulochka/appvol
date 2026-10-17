@@ -179,34 +179,43 @@ def _first_index_theme(theme: str, roots: Sequence[Path]) -> Path | None:
     return None
 
 
+def _declared_directories(theme_dir: Path) -> list[Path]:
+    """The icon directories one theme install declares, empty without an index."""
+    try:
+        text = (theme_dir / "index.theme").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    declared: list[Path] = []
+    for key, value in group_entries(text, ICON_THEME_GROUP):
+        if key == "Directories" and value:
+            declared += [theme_dir / item.strip() for item in value.split(",") if item.strip()]
+    return declared
+
+
 @lru_cache(maxsize=64)
 def _theme_subdirectories(theme: str, roots: tuple[Path, ...]) -> tuple[Path, ...]:
-    """Directories of one theme that may contain icons."""
-    index = _first_index_theme(theme, roots)
-    if index is not None:
-        theme_dir = index.parent
-        declared: list[Path] = []
-        try:
-            text = index.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            text = ""
-        for key, value in group_entries(text, ICON_THEME_GROUP):
-            if key != "Directories" or not value:
-                continue
-            declared += [theme_dir / item.strip() for item in value.split(",") if item.strip()]
-        if declared:
-            return tuple(declared)
+    """Directories of one theme that may contain icons, across every root.
 
-    # Themes without a usable index.theme: look at the usual two levels.
+    A theme is merged over the XDG roots: the user's ``~/.local/share/icons``
+    adds icons to a theme installed under ``/usr/share``, often without an
+    ``index.theme`` of its own.  Steam, for one, writes its game icons into
+    ``hicolor/<size>/apps/steam_icon_<appid>.png`` there.  Every root that holds
+    the theme is therefore looked at, not only the first one with an index.
+    """
     found: list[Path] = []
     for root in roots:
         theme_dir = root / theme
         if not theme_dir.is_dir():
             continue
+        declared = _declared_directories(theme_dir)
+        if declared:
+            found += declared
+            continue
+        # No usable index.theme here: look at the usual two levels.
         found.append(theme_dir)
         found += sorted(path for path in theme_dir.glob("*") if path.is_dir())
         found += sorted(path for path in theme_dir.glob("*/*") if path.is_dir())
-    return tuple(found)
+    return _unique(found)
 
 
 def _theme_inherits(theme: str, roots: Sequence[Path]) -> list[str]:
@@ -283,6 +292,37 @@ def resolvable(
             break
         candidate = candidate.rsplit("-", 1)[0]
     return False
+
+
+@lru_cache(maxsize=8)
+def _theme_icon_names(
+    theme: str, roots: tuple[Path, ...], pixmaps: tuple[Path, ...]
+) -> tuple[str, ...]:
+    """Icon names of one theme chain, cached; the scan is once per theme."""
+    names: set[str] = set()
+    for candidate_theme in theme_chain(theme, roots):
+        for directory in _theme_subdirectories(candidate_theme, roots):
+            for suffix in ICON_SUFFIXES:
+                for path in directory.glob(f"*{suffix}"):
+                    names.add(path.name[: -len(suffix)])
+    for directory in pixmaps:
+        for suffix in ICON_SUFFIXES:
+            for path in directory.glob(f"*{suffix}"):
+                names.add(path.name[: -len(suffix)])
+    return tuple(sorted(names))
+
+
+def theme_icon_names(
+    theme: str | None = None,
+    roots: Sequence[Path] | None = None,
+    pixmaps: Sequence[Path] | None = None,
+) -> tuple[str, ...]:
+    """Every icon name the theme chain can render, sorted, for an icon chooser."""
+    return _theme_icon_names(
+        theme or icon_theme(),
+        tuple(roots) if roots is not None else icon_roots(),
+        tuple(pixmaps) if pixmaps is not None else pixmap_dirs(),
+    )
 
 
 # --------------------------------------------------------------------------- #

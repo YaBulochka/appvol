@@ -537,6 +537,58 @@ FIREFOX_STREAM = Stream(index=2, props={"application.name": "Firefox"}, volume=(
 PLASMA_STREAM = Stream(index=3, props={"application.name": "plasmashell"}, volume=(0.5,))
 
 
+class ProfileIconTest(unittest.TestCase):
+    """The icon a stream profile resolves to, see ``Daemon._profile_icon``."""
+
+    def make(self, profile, streams):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        app = StepDaemon(Path(tmp.name), [profile])
+        app.pulse = RecordingPulse(streams)
+        return app
+
+    def icon_of(self, app, profile) -> str:
+        streams, result = app._resolve(profile)
+        by_index = {stream.index: stream for stream in streams}
+        return app._profile_icon(profile, result, by_index)
+
+    def test_an_exclude_profile_takes_the_icon_of_the_excluded_application(self) -> None:
+        profile = Profile(id="nogame", exclude=("cs2",))
+        app = self.make(profile, [SPOTIFY_STREAM, FIREFOX_STREAM])
+
+        with mock.patch.object(daemon, "resolve_icon", return_value="cs2") as resolve:
+            self.assertEqual(self.icon_of(app, profile), "cs2")
+
+        kwargs = resolve.call_args.kwargs
+        self.assertEqual(kwargs["desktop_file_name"], "cs2")
+        self.assertEqual(kwargs["props"], {})
+
+    def test_an_exclude_profile_without_a_resolvable_icon_uses_the_generic_one(self) -> None:
+        profile = Profile(id="nogame", exclude=("cs2",))
+        app = self.make(profile, [FIREFOX_STREAM, SPOTIFY_STREAM])
+
+        with mock.patch.object(daemon, "resolve_icon", return_value=None):
+            self.assertEqual(self.icon_of(app, profile), daemon.PROFILE_FALLBACK_ICON)
+
+    def test_an_include_profile_keeps_the_matched_stream_properties(self) -> None:
+        profile = Profile(id="music", include=("spotify",))
+        app = self.make(profile, [SPOTIFY_STREAM])
+
+        with mock.patch.object(daemon, "resolve_icon", return_value="spotify") as resolve:
+            self.assertEqual(self.icon_of(app, profile), "spotify")
+
+        kwargs = resolve.call_args.kwargs
+        self.assertEqual(kwargs["desktop_file_name"], "spotify")
+        self.assertEqual(kwargs["props"], SPOTIFY_STREAM.props)
+
+    def test_a_profile_icon_wins_when_the_theme_has_it(self) -> None:
+        profile = Profile(id="music", include=("spotify",), icon="firefox")
+        app = self.make(profile, [SPOTIFY_STREAM])
+
+        with mock.patch.object(daemon, "resolvable", return_value=True):
+            self.assertEqual(self.icon_of(app, profile), "firefox")
+
+
 class AutoModeTest(unittest.TestCase):
     """The auto mode cycles the applications that are playing, in order."""
 

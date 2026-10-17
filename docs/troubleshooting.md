@@ -23,5 +23,4 @@ journalctl --user -u appvold -f    # when it runs under systemd
   owns `org.freedesktop.Notifications`. The daemon logs `cannot show volume OSD`
   when the call fails.
 - **The window does not start:** PySide6 is missing, or was installed after the
-  last `install.sh`. `python3 -c "import PySide6"` answers it. The tray icon also
-  needs a system tray in the panel.
+  last `install.sh`. `python3 -c "import PySide6"` answers it.
