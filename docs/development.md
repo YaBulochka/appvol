@@ -263,3 +263,48 @@ launchers into `<prefix>/bin`, writes the substituted unit into
 it also links `appvol-gui` and installs the window entry and both icons into the
 user's data directories; `--no-gui` and `--gui` force the decision either way.
 `--uninstall` reverses all of it, and the script refuses to run as root.
+
+## AUR
+
+The AUR publishes both packages from one package base, `appvol`, which lives in
+its own repository:
+
+```sh
+git clone ssh://aur@aur.archlinux.org/appvol.git
+```
+
+That checkout is not this one and its `PKGBUILD` is not `packaging/PKGBUILD`.
+Two lines differ, and both differences follow from where the archive comes from:
+
+* `source` names the release asset over HTTPS
+  (`$url/releases/download/v$pkgver/$pkgbase-$pkgver.tar.gz`). An AUR user builds
+  the package on their own machine, so a path into a local checkout would not
+  resolve for them.
+* `sha256sums` carries the real sum of that asset. `packaging/PKGBUILD` can use
+  `SKIP` because the archive is written next to it by `bin/appvol-release`; the
+  published asset is fetched over the network, and the sum to use is the one in
+  the release's `SHA256SUMS`.
+
+`.SRCINFO` is generated and never edited by hand. It has to be committed with
+every change, or the AUR web interface and the `yay`-style helpers read a stale
+version:
+
+```sh
+makepkg --printsrcinfo > .SRCINFO
+```
+
+A release therefore has one more step after the tag:
+
+```sh
+cd /path/to/appvol-aur
+$EDITOR PKGBUILD                 # pkgver, pkgrel, the source sum
+makepkg --printsrcinfo > .SRCINFO
+makepkg --force --nodeps         # proves the package still builds
+git commit -am "upgpkg: appvol X.Y.Z-1"
+git push
+```
+
+`pkgrel` returns to `1` on a version bump and is raised for a packaging change
+that ships the same upstream version. `makepkg --nodeps` skips the dependency
+check, which matters on a machine that has no Plasma session installed: the
+build copies files and never imports the module.
