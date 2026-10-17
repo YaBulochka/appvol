@@ -118,16 +118,13 @@ Rectangle {
                 text: "Step"
             }
 
-            Controls.SpinBox {
+            PercentSpinBox {
                 id: stepBox
-                editable: true
-                from: 1
-                to: 50
-                value: Math.round(bridge.config.step || 5)
-                textFromValue: (value) => Math.round(value) + " %"
+                minimum: 1
+                realValue: bridge.config.step || 5
                 Controls.ToolTip.visible: hovered
                 Controls.ToolTip.text: "The volume keys move by this much, for every profile"
-                onValueModified: bridge.setStep(card.profile.id, value)
+                onEdited: (value) => bridge.setStep(card.profile.id, value)
             }
         }
     }
@@ -135,7 +132,7 @@ Rectangle {
     Connections {
         target: bridge
         function onConfigChanged() {
-            stepBox.value = Math.round(bridge.config.step || 5)
+            stepBox.realValue = bridge.config.step || 5
         }
     }
 }

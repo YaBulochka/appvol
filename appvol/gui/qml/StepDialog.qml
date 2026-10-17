@@ -16,7 +16,7 @@ Controls.Dialog {
     function openFor(existing) {
         profile = existing
         if (existing) {
-            stepBox.value = Math.round(existing.step || bridge.config.step || 5)
+            stepBox.realValue = existing.step || bridge.config.step || 5
         }
         open()
     }
@@ -40,12 +40,9 @@ Controls.Dialog {
 
             Controls.Label { text: "Step:" }
 
-            Controls.SpinBox {
+            PercentSpinBox {
                 id: stepBox
-                editable: true
-                from: 0
-                to: 50
-                textFromValue: (value) => Math.round(value) + " %"
+                minimum: 0
             }
 
             Item { Layout.fillWidth: true }
@@ -61,6 +58,6 @@ Controls.Dialog {
     }
 
     onAccepted: if (profile) {
-        bridge.setStep(profile.id, stepBox.value)
+        bridge.setStep(profile.id, stepBox.realValue)
     }
 }

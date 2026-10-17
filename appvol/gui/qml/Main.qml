@@ -62,6 +62,19 @@ Kirigami.ApplicationWindow {
         return idle + " The volume keys and the profile keys are set in System Settings → Shortcuts, entry “Appvol”."
     }
 
+    // The volume of a target can change outside the window: the hotkeys, or
+    // another application on the same streams.  A light poll keeps the sliders
+    // honest while the window is on screen; a hidden window makes no calls.
+    // Half a second is close enough to the keys, and an idle overview costs the
+    // daemon well under a millisecond (the icon theme is cached), so the timer
+    // is cheap.
+    Timer {
+        interval: 500
+        running: root.visible
+        repeat: true
+        onTriggered: bridge.refresh()
+    }
+
     pageStack.initialPage: Kirigami.Page {
         id: page
         globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None

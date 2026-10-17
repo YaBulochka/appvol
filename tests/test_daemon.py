@@ -348,6 +348,19 @@ class SetStepTest(unittest.TestCase):
             stored = parse_profiles(app.profiles_path.read_text(encoding="utf-8"))
             self.assertEqual(stored[0].step, 7.0)
 
+    def test_a_fractional_step_survives_the_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            app = StepDaemon(base, [Profile(id="spotify", name="Spotify")])
+
+            answer = app._set_step("spotify", 2.5)
+
+            self.assertEqual(answer["profiles"][0]["step"], 2.5)
+            written = app.profiles_path.read_text(encoding="utf-8")
+            self.assertIn("step = 2.5", written)
+            stored = parse_profiles(written)
+            self.assertEqual(stored[0].step, 2.5)
+
     def test_a_zero_step_hands_the_choice_back_to_the_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

@@ -249,7 +249,8 @@ maximum across the matched streams.
 [`appvol/config.py`](../appvol/config.py) reads `~/.config/appvol/config.toml`
 (`XDG_CONFIG_HOME` is honoured). A missing file means defaults; a malformed value
 means the default for that key alone, with a warning in the log. `step` and
-`max_volume` are percentages, `max_volume` is capped at 150, `osd` toggles the
+`max_volume` are percentages, `step` may be fractional (`2.5`), `max_volume` is
+capped at 150, `osd` toggles the
 OSD, `osd_show_name` captions the application name in it, `mode` picks what the
 keys cycle (`profiles` or `auto`), `profile_idle_timeout` is the number of
 seconds before a profile returns to Active, and `kwin_script` overrides the

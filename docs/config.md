@@ -3,7 +3,7 @@
 `~/.config/appvol/config.toml`, every key optional:
 
 ```toml
-step = 5                     # relative step in percent
+step = 5                     # relative step in percent, fractions like 2.5 allowed
 max_volume = 100             # upper limit, up to 150
 osd = true                   # show the KDE OSD
 osd_show_name = false        # caption the application name in the OSD

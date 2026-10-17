@@ -228,6 +228,16 @@ class Bridge(QObject):
         taken = [str(profile.get("id") or "") for profile in self._profiles]
         return id_from_name(str(name), taken)
 
+    @Slot(float, result=str)
+    def formatStep(self, value: float) -> str:
+        """A step in percent as a field shows it: two decimals at most, no zeros."""
+        return _format_number(float(value))
+
+    @Slot(str, result=float)
+    def parseStep(self, text: str) -> float:
+        """The number typed into a step field, tolerant of a comma and the " %" suffix."""
+        return _parse_number(str(text))
+
     @Slot("QVariantList", "QVariantList", result="QVariantMap")
     def matchesNow(self, include: list, exclude: list) -> dict:
         """What a draft profile selects right now, for the editor's live line.
@@ -261,19 +271,29 @@ class Bridge(QObject):
     # -- internals ---------------------------------------------------------
 
     def _apply_overview(self, overview: dict) -> None:
-        self._current = str(overview.get("current") or ACTIVE_ID)
-        self._idle_timeout = float(overview.get("idle_timeout") or 0.0)
-        self._config = dict(overview.get("config") or {})
+        config = dict(overview.get("config") or {})
+        idle_timeout = float(overview.get("idle_timeout") or 0.0)
+        current = str(overview.get("current") or ACTIVE_ID)
+        settings_changed = config != self._config or idle_timeout != self._idle_timeout
 
         profiles = []
         for profile in overview.get("profiles", []):
             entry = dict(profile)
             entry["key"] = self._key_of(entry)
             profiles.append(entry)
+        # The window refreshes on a timer: signal only on a real change, so an
+        # idle tick neither rebuilds the list nor resets a field being edited.
+        profiles_changed = profiles != self._profiles or current != self._current
+
+        self._current = current
+        self._idle_timeout = idle_timeout
+        self._config = config
         self._profiles = profiles
 
-        self.profilesChanged.emit()
-        self.configChanged.emit()
+        if profiles_changed:
+            self.profilesChanged.emit()
+        if settings_changed:
+            self.configChanged.emit()
 
     def _icon_of(self, identifier: str) -> str:
         """Icon of one application identifier, resolved like the daemon does.
@@ -338,3 +358,17 @@ class Bridge(QObject):
         if message:
             log.warning("gui: %s", message)
         self.errorChanged.emit()
+
+
+def _format_number(value: float) -> str:
+    """A percentage with two decimals at most and no trailing zeros: 2.5, 5, 12.25."""
+    return f"{round(float(value), 2):g}"
+
+
+def _parse_number(text: str) -> float:
+    """The number in a step field, "2,5 %" and "2.5 %" alike; unknown text is zero."""
+    cleaned = str(text).replace(",", ".").replace("%", "").strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0

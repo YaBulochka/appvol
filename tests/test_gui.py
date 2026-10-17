@@ -463,5 +463,85 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(bridge.error, NOT_RUNNING)
 
 
+@unittest.skipUnless(HAVE_QT, "PySide6 is not installed")
+class StepFieldTests(unittest.TestCase):
+    """A step may be fractional; the fields format it and the daemon gets a double."""
+
+    def make(self, overview=None):
+        self.proxy = FakeProxy(
+            {"Overview": overview or OVERVIEW, "Applications": APPLICATIONS}
+        )
+        return Bridge(Client(connect=lambda: self.proxy), FakeKeys())
+
+    def test_a_fraction_is_shown_without_trailing_zeros(self) -> None:
+        bridge = self.make()
+        self.assertEqual(bridge.formatStep(2.5), "2.5")
+        self.assertEqual(bridge.formatStep(5.0), "5")
+        self.assertEqual(bridge.formatStep(12.25), "12.25")
+
+    def test_a_typed_field_is_parsed_with_a_comma_or_the_suffix(self) -> None:
+        bridge = self.make()
+        self.assertEqual(bridge.parseStep("2.5 %"), 2.5)
+        self.assertEqual(bridge.parseStep("2,5 %"), 2.5)
+        self.assertEqual(bridge.parseStep(" 3 % "), 3.0)
+        self.assertEqual(bridge.parseStep("abc"), 0.0)
+
+    def test_a_fractional_step_is_written_as_a_double(self) -> None:
+        bridge = self.make()
+        bridge.setStep("spotify", 2.5)
+        name, args = self.proxy.calls[0]
+        self.assertEqual(name, "SetStep")
+        self.assertAlmostEqual(float(args[1]), 2.5)
+        self.assertIsInstance(args[1], dbus.Double)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 is not installed")
+class RefreshSignalTests(unittest.TestCase):
+    """The window refreshes on a timer, so a signal must fire only on a real change."""
+
+    def make(self, overview=None):
+        self.proxy = FakeProxy(
+            {"Overview": overview or OVERVIEW, "Applications": APPLICATIONS}
+        )
+        return Bridge(Client(connect=lambda: self.proxy), FakeKeys())
+
+    def test_the_settings_signal_stays_quiet_when_nothing_changed(self) -> None:
+        bridge = self.make()
+        seen = []
+        bridge.configChanged.connect(lambda: seen.append(1))
+        bridge.refresh()
+        bridge.refresh()
+        self.assertEqual(len(seen), 1)
+
+    def test_the_settings_signal_fires_when_a_setting_changes(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        seen = []
+        bridge.configChanged.connect(lambda: seen.append(1))
+        changed = {**OVERVIEW, "config": {**OVERVIEW["config"], "step": 7.5}}
+        self.proxy.__dict__["answers"]["Overview"] = changed
+        bridge.refresh()
+        self.assertEqual(len(seen), 1)
+
+    def test_the_panel_signal_stays_quiet_when_nothing_changed(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        seen = []
+        bridge.profilesChanged.connect(lambda: seen.append(1))
+        bridge.refresh()
+        self.assertEqual(seen, [])
+
+    def test_the_panel_signal_fires_when_the_volume_changes(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        seen = []
+        bridge.profilesChanged.connect(lambda: seen.append(1))
+        active, spotify = OVERVIEW["profiles"]
+        moved = {**OVERVIEW, "profiles": [active, {**spotify, "percent": 40}]}
+        self.proxy.__dict__["answers"]["Overview"] = moved
+        bridge.refresh()
+        self.assertEqual(len(seen), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

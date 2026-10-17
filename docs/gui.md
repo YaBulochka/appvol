@@ -81,7 +81,10 @@ running, a banner says so and offers **Try Again**, and the list stays empty
 instead of pretending.
 
 The window reads the whole panel with one `Overview()` call and refreshes it when
-it gains focus, when a button asks for it, and after every write.
+it gains focus, when a button asks for it, after every write, and every half
+second while it is on screen. The timer keeps the sliders in step with the volume
+keys and any other application that moves the same streams, so **Refresh** is only
+needed after a change the window could not see.
 
 Closing the window quits the GUI. The daemon and the hotkeys run on their own, so
 nothing else stops: open the window to change a setting, close it to leave.
@@ -114,7 +117,8 @@ scrolls, so the buttons never leave the screen however short the window is.
   wide or too narrow is visible before saving.
 * **Step** and **Maximum volume** sit side by side, each with a **Default** box.
   Checked, the profile follows `config.toml`; unchecked, the field next to it
-  holds a value of its own.
+  holds a value of its own. The step takes fractions as well as whole percents:
+  `2.5 %` is a valid step, typed with a dot or a comma.
 * **Icon** previews the icon the OSD will draw and opens a grid of the theme's
   icons through **Change…**; **Automatic** in that grid clears the choice. Left
   automatic, a profile shows the icon of the application it names: the first

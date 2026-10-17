@@ -95,6 +95,7 @@ Kirigami.OverlaySheet {
             draftMax = globalMax
             draftIcon = ""
         }
+        stepBox.realValue = draftStep
         open()
     }
 
@@ -497,22 +498,18 @@ Kirigami.OverlaySheet {
                     spacing: Kirigami.Units.smallSpacing
 
                     Controls.CheckBox {
-                        text: "Default (" + Math.round(sheet.globalStep) + " %)"
+                        text: "Default (" + bridge.formatStep(sheet.globalStep) + " %)"
                         checked: sheet.stepDefault
                         onToggled: sheet.stepDefault = checked
                     }
 
                     Item { Layout.fillWidth: true }
 
-                    Controls.SpinBox {
+                    PercentSpinBox {
                         id: stepBox
                         enabled: !sheet.stepDefault
-                        from: 1
-                        to: 50
-                        editable: true
-                        value: sheet.draftStep
-                        textFromValue: (value) => value + " %"
-                        onValueModified: sheet.draftStep = value
+                        minimum: 1
+                        onEdited: (value) => sheet.draftStep = value
                     }
                 }
             }
