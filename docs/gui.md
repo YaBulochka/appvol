@@ -92,35 +92,48 @@ header, and keeps the whole thing scrollbar-free down to 380 px.
 
 ## The editor
 
-**New Profile** and **Edit** open a sheet with the fields of
-[`profiles.toml`](../docs/architecture.md#profiles):
+**New Profile** and **Edit** open a dialog over the window. The header carries the
+title and a close button, the footer carries the actions, and only the body
+scrolls, so the buttons never leave the screen however short the window is.
 
-* **Identifier** is the key of the profile in the file. It can only be set while
-  creating one; renaming means creating a new profile.
-* **Name** is what the OSD and the window show.
-* **Include** and **Exclude** hold application identifiers. **Add…** opens the list
-  of what is playing right now — grouped by application, with the icon and the
-  live percent — and writes the identifier that the daemon reports, so the profile
-  matches by construction. A name that is not playing can be typed instead, which
-  is how a game or a browser is added before it starts. An empty **Include** means
-  every application stream with the shell left out; a name in **Exclude** turns the
-  profile into "everything except this".
-* **Step** and **Maximum volume** are per profile; a step of 0 follows
-  `config.toml`, which is the value the Active row of the list edits.
-* **Icon** opens a grid of the theme's icons with a search box, to override the
-  icon of the OSD and of the row; **Automatic** clears the choice. Left
+* **Name** is what the OSD and the window show. A new profile takes its
+  identifier from the name — "Everything but CS2" is written as
+  `everything-but-cs2` — and the caption under the field shows what it becomes.
+  The identifier is not an input: renaming an existing profile keeps the id it
+  was created with.
+* **Applies to** is a switch between **Only these apps** and **All apps except…**.
+  Both readings share one chip list, so switching the mode turns "play in Spotify"
+  into "play in everything but Spotify" without retyping the list. **Only these
+  apps** writes `include`, **All apps except…** writes `exclude`; an empty
+  **Only these apps** means every application stream with the shell left out.
+* **Playing now** lists what is playing as chips; one click adds the application.
+  **Add app…** stays for a name that is not playing yet — a game or a browser
+  added before it starts — and opens the same list with a text field.
+* **Matches now** is a live line: it names the applications the draft profile
+  would select at this moment and counts their streams, so a profile that is too
+  wide or too narrow is visible before saving.
+* **Step** and **Maximum volume** sit side by side, each with a **Default** box.
+  Checked, the profile follows `config.toml`; unchecked, the field next to it
+  holds a value of its own.
+* **Icon** previews the icon the OSD will draw and opens a grid of the theme's
+  icons through **Change…**; **Automatic** in that grid clears the choice. Left
   automatic, a profile shows the icon of the application it names: the first
-  **Include**, or, for an exclude profile, the first **Exclude**. The button
-  previews that icon while the sheet is open, so it follows the first application
-  added. Steam game icons are ordinary theme icons there
-  (`steam_icon_<appid>`, written by Steam into `hicolor`), so the search box finds
-  them by appid even though no `.desktop` file maps the identifier to them.
-  Whether the OSD captions the application name is decided by one switch in the
-  window, **OSD App Name** in the **⋮** menu, shared by every profile — it is off
-  by default, so the OSD shows the icon alone.
+  entry of the list, resolved the way the daemon resolves it. The caption under
+  the preview says where the icon comes from ("from the application" or
+  "generic: no single application"). Steam game icons are ordinary theme icons
+  there (`steam_icon_<appid>`, written by Steam into `hicolor`), so the search
+  box finds them by appid even though no `.desktop` file maps the identifier to
+  them.
 
-The editor writes the profile in one call when **Save** is pressed, so the file
-never holds half an edit, and the daemon writes it atomically.
+The footer holds **Delete profile** on the left when an existing profile is being
+edited, and **Cancel** with **Create profile** or **Save** on the right. Deleting
+asks for confirmation first, the same dialog the row menu uses.
+
+The editor writes the profile in one call when the primary button is pressed, so
+the file never holds half an edit, and the daemon writes it atomically. Whether
+the OSD captions the application name is decided by one switch in the window,
+**OSD App Name** in the **⋮** menu, shared by every profile — it is off by
+default, so the OSD shows the icon alone.
 
 ## What is not here
 

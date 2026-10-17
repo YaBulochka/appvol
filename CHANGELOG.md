@@ -2,12 +2,24 @@
 
 ## Changed
 
+- The profile editor is a dialog now: the header and the footer stay put and only
+  the body scrolls. The identifier is no longer an input field — a new profile
+  derives it from its name, and the caption under the field shows what it becomes.
+- **Include** and **Exclude** are one chip list with an **Applies to** switch
+  between "Only these apps" and "All apps except…", so the mode says what the list
+  means. What is playing appears as chips that add the application in one click,
+  and a live **Matches now** line names the applications the draft profile selects
+  and counts their streams before it is saved.
+- **Step** and **Maximum volume** sit side by side, each with a **Default** box
+  that follows `config.toml` when checked.
+- The icon row previews the icon the OSD will draw and opens a searchable grid of
+  the theme's icons through **Change…**; **Automatic** clears the choice and
+  previews the icon of the first application the profile covers, the same icon the
+  daemon draws on the OSD. The caption says where an automatic icon comes from.
 - The OSD icon of an exclude profile ("everything but CS2") now comes from the
   excluded application instead of an arbitrary stream that happened to be playing.
-- The profile editor picks an icon from a searchable grid of the theme's icons
-  instead of a free-text field; **Automatic** clears the choice. While the sheet
-  is open, **Automatic** previews the icon of the first application the profile
-  covers, the same icon the daemon draws on the OSD.
+- **Delete profile** moved into the dialog, with the same confirmation the row menu
+  uses.
 
 ## Fixed
 

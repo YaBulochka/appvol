@@ -10,9 +10,10 @@ from appvol.apps import (
     identity,
     in_appearance_order,
     label_of,
+    matching_applications,
 )
 from appvol.match import Stream
-from appvol.profiles import match_profile
+from appvol.profiles import Profile, match_profile
 
 
 def stream(index: int, volume=(0.5, 0.5), mute: bool = False, **props: str) -> Stream:
@@ -132,6 +133,38 @@ class AutoTargetTests(unittest.TestCase):
         self.assertEqual(
             [item.key for item in in_appearance_order(restarted)], ["firefox", "spotify"]
         )
+
+
+class MatchingApplicationsTests(unittest.TestCase):
+    """The application view of a match, used by the editor's live line."""
+
+    def applications(self):
+        return group_streams([SPOTIFY, FIREFOX_TAB_A, FIREFOX_TAB_B, PLASMA])
+
+    def test_an_empty_include_takes_every_application_but_the_shell(self) -> None:
+        matched = matching_applications(Profile(id="p"), self.applications())
+        self.assertEqual([application.label for application in matched], ["Firefox", "Spotify"])
+
+    def test_an_include_selects_the_named_application(self) -> None:
+        matched = matching_applications(Profile(id="p", include=("spotify",)), self.applications())
+        self.assertEqual([application.label for application in matched], ["Spotify"])
+
+    def test_an_exclude_removes_the_named_application(self) -> None:
+        matched = matching_applications(Profile(id="p", exclude=("firefox",)), self.applications())
+        self.assertEqual([application.label for application in matched], ["Spotify"])
+
+    def test_a_shell_stream_can_be_included_explicitly(self) -> None:
+        matched = matching_applications(
+            Profile(id="p", include=("plasmashell",)), self.applications()
+        )
+        self.assertEqual([application.label for application in matched], ["plasmashell"])
+
+    def test_the_count_matches_the_streams_of_the_groups(self) -> None:
+        matched = matching_applications(Profile(id="p", include=("firefox",)), self.applications())
+        self.assertEqual(sum(len(application.indices) for application in matched), 2)
+
+    def test_nothing_playing_matches_nothing(self) -> None:
+        self.assertEqual(matching_applications(Profile(id="p"), ()), ())
 
 
 if __name__ == "__main__":

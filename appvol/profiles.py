@@ -22,6 +22,7 @@ import os
 import re
 import tomllib
 from dataclasses import dataclass, replace
+from itertools import count
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -128,6 +129,28 @@ def validate_id(value: object) -> str:
     return text
 
 
+def id_from_name(name: str, taken: Iterable[str] = ()) -> str:
+    """A profile id derived from a display name, unique among ``taken``.
+
+    The editor no longer asks for an id: it derives one from the name, so that
+    "Everything but CS2" is written as ``everything-but-cs2``.  The result always
+    matches :data:`ID_PATTERN`; a collision with a known id gets a numbered
+    suffix, which keeps :func:`appvol.daemon` from overwriting a profile the user
+    did not mean to edit.
+    """
+    slug = re.sub(r"[^a-z0-9._-]+", "-", str(name or "").strip().lower())
+    slug = slug.strip("-._")[:40] or "profile"
+    known = {str(item) for item in taken}
+    if slug != ACTIVE_ID and slug not in known:
+        return slug
+    for number in count(2):
+        suffix = f"-{number}"
+        candidate = slug[: 40 - len(suffix)].rstrip("-._") + suffix
+        if candidate != ACTIVE_ID and candidate not in known:
+            return candidate
+    raise AssertionError("unreachable: the counter always finds a free id")
+
+
 def action_name(profile_id: str) -> str:
     """Name of the KGlobalAccel action that toggles a profile."""
     return f"{ACTION_PREFIX}{profile_id}"
@@ -175,7 +198,7 @@ def match_profile(profile: Profile, streams: Iterable[Stream]) -> MatchResult:
     focus profile through :func:`appvol.match.match_streams`.
     """
     ordered = list(streams)
-    wanted = _variants(profile.include)
+    wanted = profile_variants(profile.include)
     if wanted:
         selected = [stream for stream in ordered if stream_name_variants(stream) & wanted]
         source = f"include {', '.join(sorted(wanted))}"
@@ -183,7 +206,7 @@ def match_profile(profile: Profile, streams: Iterable[Stream]) -> MatchResult:
         selected = [stream for stream in ordered if not is_panel_stream(stream)]
         source = "every application stream"
 
-    unwanted = _variants(profile.exclude)
+    unwanted = profile_variants(profile.exclude)
     if unwanted:
         selected = [stream for stream in selected if not stream_name_variants(stream) & unwanted]
 
@@ -201,11 +224,17 @@ def match_profile(profile: Profile, streams: Iterable[Stream]) -> MatchResult:
     return MatchResult(reason=f"no stream matched profile {profile.id!r} ({source})")
 
 
-def _variants(values: Sequence[str]) -> set[str]:
+def profile_variants(values: Sequence[str]) -> frozenset[str]:
+    """The name variants an ``include`` or ``exclude`` list expands to.
+
+    The editor and the daemon both reach for it: ``match_profile`` over the raw
+    streams, and :func:`appvol.apps.matching_applications` over the grouped
+    applications of the "Matches now" line.
+    """
     variants: set[str] = set()
     for value in values:
         variants |= name_variants(value)
-    return variants
+    return frozenset(variants)
 
 
 @dataclass

@@ -363,6 +363,38 @@ class BridgeTests(unittest.TestCase):
         with mock.patch.object(gui_bridge, "resolve_icon", return_value=None):
             self.assertEqual(bridge.profileIcon(["nope"], []), "")
 
+    def test_an_application_icon_comes_from_the_live_list(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.assertEqual(bridge.applicationIcon("spotify"), "spotify")
+
+    def test_an_application_icon_of_a_name_that_is_not_playing_is_resolved(self) -> None:
+        bridge = self.make()
+        with mock.patch.object(gui_bridge, "resolve_icon", return_value="utilities-terminal"):
+            self.assertEqual(bridge.applicationIcon("org.kde.konsole"), "utilities-terminal")
+
+    def test_a_new_id_is_made_from_the_name(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.assertEqual(bridge.newProfileId("Everything but CS2"), "everything-but-cs2")
+
+    def test_a_new_id_avoids_the_ids_in_use(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.assertEqual(bridge.newProfileId("Spotify"), "spotify-2")
+
+    def test_the_matches_line_counts_the_streams_of_the_selection(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.assertEqual(bridge.matchesNow([], [])["labels"], ["Spotify"])
+        self.assertEqual(bridge.matchesNow([], [])["streams"], 1)
+
+    def test_the_matches_line_honours_an_exclude(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.assertEqual(bridge.matchesNow([], ["spotify"])["labels"], [])
+        self.assertEqual(bridge.matchesNow([], ["spotify"])["streams"], 0)
+
     def test_a_step_change_is_written_and_the_panel_is_read_again(self) -> None:
         bridge = self.make()
         bridge.refresh()

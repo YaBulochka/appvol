@@ -16,7 +16,7 @@ from typing import Iterable
 
 from .focus import desktop_file_stem
 from .match import STREAM_NAME_KEYS, Stream, stream_name_variants, stream_label
-from .profiles import MODE_STREAMS, Profile, is_panel_stream
+from .profiles import MODE_STREAMS, Profile, is_panel_stream, profile_variants
 from .volume import peak
 
 
@@ -122,6 +122,34 @@ def group_streams(streams: Iterable[Stream]) -> tuple[Application, ...]:
 
     applications.sort(key=lambda application: (application.panel, application.label.casefold()))
     return tuple(applications)
+
+
+def matching_applications(
+    profile: Profile, applications: Iterable[Application]
+) -> tuple[Application, ...]:
+    """The applications a stream profile selects, the grouped view of a match.
+
+    The editor shows the result as a live "Matches now" line while the profile is
+    still a draft, so the include/exclude rule of
+    :func:`appvol.profiles.match_profile` runs over the grouped applications
+    instead of the raw streams.  An application is selected when one of its
+    identifiers is in ``include``; an empty ``include`` takes every application
+    except the shell.  ``exclude`` removes applications again.  A group carries the
+    merged variants of its streams, so selecting a group selects exactly the
+    streams the daemon would.
+    """
+    ordered = list(applications)
+    wanted = profile_variants(profile.include)
+    if wanted:
+        selected = [application for application in ordered if application.variants & wanted]
+    else:
+        selected = [application for application in ordered if not application.panel]
+    unwanted = profile_variants(profile.exclude)
+    if unwanted:
+        selected = [
+            application for application in selected if not application.variants & unwanted
+        ]
+    return tuple(selected)
 
 
 def application_profile(application: Application) -> Profile:

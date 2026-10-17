@@ -436,6 +436,12 @@ Kirigami.ApplicationWindow {
     ProfileEditor {
         id: editor
         objectName: "profileEditor"
+        accentColor: root.accentColor
+        accentTextColor: root.accentTextColor
+        onDeleteRequested: (profile) => {
+            editor.close()
+            removeDialog.askFor(profile)
+        }
     }
 
     StepDialog {

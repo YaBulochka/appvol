@@ -14,8 +14,9 @@ from typing import Any, Callable
 from PySide6.QtCore import Property, QObject, QProcess, Signal, Slot
 
 from .. import __version__
+from ..apps import Application, matching_applications
 from ..icon import resolve as resolve_icon, theme_icon_names
-from ..profiles import ACTIVE_ID, action_name
+from ..profiles import ACTIVE_ID, Profile, action_name, id_from_name
 from .client import NOT_RUNNING, Client, DaemonError
 from .shortcuts import ShortcutKeys
 
@@ -214,12 +215,38 @@ class Bridge(QObject):
             first = str(include[0])
         elif exclude:
             first = str(exclude[0])
-        if not first:
-            return ""
-        for application in self._applications:
-            if str(application.get("id") or "") == first:
-                return str(application.get("icon") or "")
-        return resolve_icon(desktop_file_name=first) or ""
+        return self._icon_of(first)
+
+    @Slot(str, result=str)
+    def applicationIcon(self, identifier: str) -> str:
+        """The icon of one application, for the chips of the editor."""
+        return self._icon_of(str(identifier))
+
+    @Slot(str, result=str)
+    def newProfileId(self, name: str) -> str:
+        """The id a new profile takes: its name, slugged and kept unique."""
+        taken = [str(profile.get("id") or "") for profile in self._profiles]
+        return id_from_name(str(name), taken)
+
+    @Slot("QVariantList", "QVariantList", result="QVariantMap")
+    def matchesNow(self, include: list, exclude: list) -> dict:
+        """What a draft profile selects right now, for the editor's live line.
+
+        Empty ``include`` means every application stream with the shell left out,
+        and ``exclude`` removes applications again, the rule the daemon applies.
+        """
+        draft = Profile(
+            id="draft",
+            include=tuple(str(value) for value in include),
+            exclude=tuple(str(value) for value in exclude),
+        )
+        matched = matching_applications(
+            draft, [self._as_application(entry) for entry in self._applications]
+        )
+        return {
+            "labels": [application.label for application in matched],
+            "streams": sum(len(application.indices) for application in matched),
+        }
 
     @Slot()
     def openShortcuts(self) -> None:
@@ -247,6 +274,32 @@ class Bridge(QObject):
 
         self.profilesChanged.emit()
         self.configChanged.emit()
+
+    def _icon_of(self, identifier: str) -> str:
+        """Icon of one application identifier, resolved like the daemon does.
+
+        A streaming application answers with the icon of its live stream; a name
+        that is not playing falls back to the ``.desktop`` file, and to nothing
+        when even that is unknown.
+        """
+        name = str(identifier).strip()
+        if not name:
+            return ""
+        for application in self._applications:
+            if str(application.get("id") or "") == name:
+                return str(application.get("icon") or "")
+        return resolve_icon(desktop_file_name=name) or ""
+
+    def _as_application(self, entry: dict) -> Application:
+        """A live application, adapted from the daemon reply for the matcher."""
+        key = str(entry.get("id") or "")
+        return Application(
+            key=key,
+            label=str(entry.get("label") or key),
+            variants=frozenset(str(value) for value in entry.get("variants") or []),
+            indices=tuple(int(value) for value in entry.get("streams") or []),
+            panel=bool(entry.get("panel")),
+        )
 
     def _key_of(self, profile: dict) -> str:
         """The key bound to the profile action, for the line under its name.

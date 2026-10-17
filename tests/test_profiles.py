@@ -18,6 +18,7 @@ from appvol.profiles import (
     active_profile,
     dumps,
     find,
+    id_from_name,
     is_panel_stream,
     load,
     match_profile,
@@ -54,6 +55,29 @@ class IdTests(unittest.TestCase):
     def test_active_is_reserved(self) -> None:
         with self.assertRaises(ValueError):
             validate_id(ACTIVE_ID)
+
+
+class IdFromNameTests(unittest.TestCase):
+    def test_a_name_becomes_a_slug(self) -> None:
+        self.assertEqual(id_from_name("Everything but CS2"), "everything-but-cs2")
+        self.assertEqual(id_from_name("  Spotify  "), "spotify")
+
+    def test_the_slug_fits_the_pattern(self) -> None:
+        for name in ("Everything but CS2", "", "   ", "!!!", "x" * 80):
+            with self.subTest(name=name):
+                validate_id(id_from_name(name))
+
+    def test_a_collision_gets_a_numbered_suffix(self) -> None:
+        self.assertEqual(id_from_name("Spotify", ["spotify"]), "spotify-2")
+        self.assertEqual(id_from_name("Spotify", ["spotify", "spotify-2"]), "spotify-3")
+
+    def test_a_long_name_still_gets_a_free_suffix(self) -> None:
+        slug = id_from_name("x" * 80, ["x" * 40])
+        self.assertEqual(len(slug), 40)
+        validate_id(slug)
+
+    def test_the_built_in_id_is_never_returned(self) -> None:
+        self.assertEqual(id_from_name(ACTIVE_ID), "active-2")
 
 
 class ActiveProfileTests(unittest.TestCase):
