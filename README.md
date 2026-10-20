@@ -155,12 +155,12 @@ Settings (hotkeys), and PipeWire with `pipewire-pulse`.
 The packages pull in everything else. Only the no-root `install.sh` route needs
 these Python modules by hand, and prints the command for your distribution:
 
-| Import name | Arch package      | Debian, Ubuntu     | Fedora             |
-| ----------- | ----------------- | ------------------ | ------------------ |
-| `tomllib`   | `python` (3.11+)  | `python3` (3.11+)  | `python3` (3.11+)  |
-| `dbus`      | `python-dbus`     | `python3-dbus`     | `python3-dbus`     |
-| `gi`        | `python-gobject`  | `python3-gi`       | `python3-gobject`  |
-| `pulsectl`  | `python-pulsectl` | `python3-pulsectl` | `python3-pulsectl` |
+| Import name | Arch package      | Debian-based (Debian, Ubuntu, Kubuntu) | Fedora-based (Fedora, Nobara, Bazzite) |
+| ----------- | ----------------- | -------------------------------------- | -------------------------------------- |
+| `tomllib`   | `python` (3.11+)  | `python3` (3.11+)                      | `python3` (3.11+)                      |
+| `dbus`      | `python-dbus`     | `python3-dbus`                         | `python3-dbus`                         |
+| `gi`        | `python-gobject`  | `python3-gi`                           | `python3-gobject`                      |
+| `pulsectl`  | `python-pulsectl` | `python3-pulsectl`                     | `python3-pulsectl`                     |
 
 The window is optional and adds PySide6 and Kirigami
 (`pyside6`, `kirigami`, `qqc2-desktop-style` and `breeze-icons` on Arch). The
@@ -183,19 +183,20 @@ install. Each block below starts the daemon with the session afterwards.
 
 The files of a release (`X.Y.Z` is its version):
 
-| Distribution             | Files                                                                     |
-| ------------------------ | ------------------------------------------------------------------------- |
-| Arch Linux               | `appvol-X.Y.Z-1-any.pkg.tar.zst` and `appvol-gui-X.Y.Z-1-any.pkg.tar.zst` |
-| Debian, Ubuntu, KDE neon | `appvol_X.Y.Z-1_all.deb` and `appvol-gui_X.Y.Z-1_all.deb`                 |
-| Fedora                   | `appvol-X.Y.Z-1.noarch.rpm` and `appvol-gui-X.Y.Z-1.noarch.rpm`           |
-| any distribution         | `appvol-X.Y.Z.tar.gz`, the source archive with `install.sh`               |
-| all of the above         | `SHA256SUMS`                                                              |
+| Distribution                           | Files                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------- |
+| Arch Linux                             | `appvol-X.Y.Z-1-any.pkg.tar.zst` and `appvol-gui-X.Y.Z-1-any.pkg.tar.zst` |
+| Debian-based (Debian, Ubuntu, Kubuntu) | `appvol_X.Y.Z-1_all.deb` and `appvol-gui_X.Y.Z-1_all.deb`                 |
+| Fedora-based (Fedora, Nobara, Bazzite) | `appvol-X.Y.Z-1.noarch.rpm` and `appvol-gui-X.Y.Z-1.noarch.rpm`           |
+| any distribution                       | `appvol-X.Y.Z.tar.gz`, the source archive with `install.sh`               |
+| all of the above                       | `SHA256SUMS`                                                              |
 
-**Plasma 6 is required**, which rules out Debian 12 and Ubuntu 24.04 with its
-stock Plasma 5. Debian 13, Ubuntu 25.04 and later, and Kubuntu 26.04 LTS ship
-Plasma 6. KDE neon is still built on Ubuntu 24.04 LTS but carries Plasma 6 from
-KDE's own repositories, so the `.deb` files should install there too; that is
-not tested.
+**Plasma 6 is required**, which rules out Debian 12 and Kubuntu 24.04, both of
+which ship Plasma 5. Debian 13, Kubuntu 25.04 and later ship Plasma 6, and
+Kubuntu 26.04 is the current LTS. Fedora ships Plasma in its KDE edition, since
+Workstation defaults to GNOME. KDE neon is still built on Ubuntu 24.04 LTS but
+carries Plasma 6 from KDE's own repositories, so the `.deb` files should
+install there too; that is not tested.
 
 ### Arch Linux
 
@@ -205,7 +206,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now appvold
 ```
 
-The same split package is in the AUR, so a helper can fetch and build it:
+The same split packages are in the AUR, so a helper can fetch and build them:
 
 ```
 yay -S appvol appvol-gui                   # or paru
@@ -216,7 +217,7 @@ systemctl --user enable --now appvold
 Both AUR packages come from the one package base `appvol` and build from the
 release archive. Leave out `appvol-gui` for a headless install.
 
-### Debian / Ubuntu / KDE neon
+### Debian-based (Debian, Ubuntu, Kubuntu)
 
 ```
 sudo apt install ./appvol_*.deb ./appvol-gui_*.deb
@@ -224,13 +225,66 @@ systemctl --user daemon-reload
 systemctl --user enable --now appvold
 ```
 
-### Fedora
+### Fedora-based (Fedora, Nobara)
 
 ```
 sudo dnf install ./appvol-*.rpm            # appvol and appvol-gui
 systemctl --user daemon-reload
 systemctl --user enable --now appvold
 ```
+
+### Fedora Atomic (Bazzite, Silverblue, Kinoite, Aurora)
+
+These images are immutable, so `dnf` refuses to install packages. Layer the
+RPMs instead. `rpm-ostree` resolves the Python and Qt packages from the Fedora
+repositories, and the layer stays across image updates:
+
+```
+rpm-ostree install ./appvol-*.rpm
+systemctl reboot
+```
+
+After the reboot:
+
+```
+systemctl --user enable --now appvold
+```
+
+Layering needs a reboot and adds the packages to every future deployment. A
+locally layered RPM does not update on its own, so download each new release
+and repeat the install; a layer can also hold back an image update until you
+remove it. A per-user install from the source archive skips the reboot and the
+layer, but only works when the Python modules are already on the image; see
+[Any distribution, no root](#any-distribution-no-root).
+
+### SteamOS (Desktop Mode)
+
+SteamOS 3.7 and later ship Plasma 6 in Desktop Mode. That session provides the
+KWin, Plasma and shortcut services appvol needs. Gaming Mode has no KWin, so
+appvol cannot follow the focused window there.
+
+The root filesystem is read-only: `pacman` needs `steamos-readonly disable`,
+and the next SteamOS update wipes whatever it installed. `install.sh` writes to
+the home partition instead, which updates leave alone. The `.deb` and `.rpm`
+do not apply to an Arch-based image, so take the source archive:
+
+```sh
+tar xzf appvol-X.Y.Z.tar.gz
+cd appvol-X.Y.Z
+# python-dbus and python-gobject ship with the image; pulsectl does not
+python3 -m venv ~/.cache/appvol-pip
+~/.cache/appvol-pip/bin/pip install --upgrade --target \
+    "$(python3 -c 'import site; print(site.getusersitepackages())')" pulsectl
+./install.sh --service --no-gui
+```
+
+SteamOS marks its Python as externally managed, hence the throwaway venv
+instead of `pip install --user`. `--no-gui` skips the window, whose PySide6 is
+not in the image; the CLI manages profiles, and `config.toml` holds the rest.
+The install lives in `~/.local` and `~/.config/systemd/user` by default, so it
+survives SteamOS updates. When an update moves to a new Python version, install
+`pulsectl` again into the new user site directory. The module list reflects
+SteamOS 3.8, and this route is not tested on a Deck yet.
 
 ### Verify the download (optional)
 
@@ -269,8 +323,10 @@ for the no-root install):
 ```
 systemctl --user disable --now appvold
 sudo pacman -Rns appvol appvol-gui      # Arch
-sudo apt remove appvol appvol-gui       # Debian, Ubuntu
-sudo dnf remove appvol appvol-gui       # Fedora
+sudo apt remove appvol appvol-gui       # Debian-based
+sudo dnf remove appvol appvol-gui       # Fedora-based
+rpm-ostree uninstall appvol appvol-gui  # Fedora Atomic, e.g. Bazzite; reboot
+./install.sh --uninstall                # SteamOS, from the source archive
 ```
 
 ## Documentation

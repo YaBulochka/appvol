@@ -88,6 +88,21 @@ missing_modules() {
     done
 }
 
+# /etc/os-release names the distribution.  SteamOS and the Fedora Atomic images
+# need different advice because their root filesystem is read-only and a system
+# update replaces it.
+is_steamos() {
+    [ -r /etc/os-release ] && grep -qx 'ID=steamos' /etc/os-release
+}
+
+is_fedora_atomic() {
+    [ -e /run/ostree-booted ] && command -v rpm-ostree >/dev/null 2>&1
+}
+
+user_site() {
+    "$python" -c 'import site; print(site.getusersitepackages())'
+}
+
 # The window needs PySide6; the daemon and the CLI do not, so a missing PySide6
 # is not a failure, only a note at the end.
 want_gui() {
@@ -108,19 +123,42 @@ update_icon_cache() {
 }
 
 check_dependencies() {
-    local missing
+    local missing site
     missing="$(missing_modules)"
     if [ -z "$missing" ]; then
         return 0
     fi
-    cat >&2 <<EOF
-appvol: missing Python modules: ${missing//$'\n'/ }
-        Arch:   sudo pacman -S python-dbus python-gobject python-pulsectl
-        Debian: sudo apt install python3-dbus python3-gi python3-pulsectl
-        Fedora: sudo dnf install python3-dbus python3-gobject python3-pulsectl
-        If your distribution has no package for one of them (pulsectl is the
-        usual case), install it with: $python -m pip install --user <name>
+    echo "appvol: missing Python modules: ${missing//$'\n'/ }" >&2
+    if is_steamos; then
+        site="$(user_site)"
+        cat >&2 <<EOF
+        SteamOS includes python-dbus and python-gobject; pulsectl is the one
+        usually missing. A SteamOS update wipes anything installed with pacman,
+        so keep pulsectl in your home directory:
+            $python -m venv ~/.cache/appvol-pip
+            ~/.cache/appvol-pip/bin/pip install --upgrade --target "$site" pulsectl
+        SteamOS marks its Python as externally managed, so plain
+        'pip install --user' refuses to run; the throwaway venv avoids that.
 EOF
+    elif is_fedora_atomic; then
+        cat >&2 <<EOF
+        Fedora Atomic: layer the modules, then reboot:
+            rpm-ostree install python3-dbus python3-gobject python3-pulsectl
+        The appvol RPM declares them already, so 'rpm-ostree install
+        ./appvol-*.rpm' from the release is the shorter route.
+EOF
+    else
+        cat >&2 <<EOF
+        Arch:          sudo pacman -S python-dbus python-gobject python-pulsectl
+        Debian-based:  sudo apt install python3-dbus python3-gi python3-pulsectl
+        Fedora-based:  sudo dnf install python3-dbus python3-gobject python3-pulsectl
+        If your distribution has no package for one of them (pulsectl is the
+        usual case), install it with
+            $python -m pip install --user <name>
+        and add --break-system-packages where pip calls the environment
+        externally managed.
+EOF
+    fi
     return 1
 }
 
@@ -217,7 +255,12 @@ if want_gui; then
     echo "appvol: window installed (appvol-gui)"
 elif [ "$with_gui" = auto ]; then
     echo "appvol: note: PySide6 is missing, so the window was skipped"
-    echo "        install it (Arch: sudo pacman -S pyside6) and run this script again"
+    if is_steamos; then
+        echo "        SteamOS does not ship PySide6; the CLI manages profiles and"
+        echo "        config.toml holds the rest"
+    else
+        echo "        install it (Arch: sudo pacman -S pyside6) and run this script again"
+    fi
 fi
 
 if [ -z "$destdir" ]; then
