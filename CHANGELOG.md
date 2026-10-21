@@ -1,3 +1,14 @@
+# Unreleased
+
+## Fixed
+
+- **Next profile** and **Previous profile** no longer repaint the last
+  application Active covered after its stream is gone. Landing on Active resolves
+  the focused window again, so a stale icon and level cannot stay in the OSD; a
+  window with no sink input answers `no stream` instead of leaving the previous
+  panel on screen. This showed up in auto mode as a Wine entry that had already
+  left `appvol list` and the KDE mixer but kept appearing in the cycle.
+
 # appvol 0.7.1 (2026-10-17)
 
 ## Added

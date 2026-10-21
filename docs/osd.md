@@ -60,6 +60,14 @@ stay empty. A profile that matches nothing answers `no stream` instead of stayin
 silent, because a profile key press is an explicit action on a target the user
 chose.
 
+The **Next profile** and **Previous profile** keys resolve Active against the
+focus of the moment, every time they land on it. They draw the icon and the
+current level of the focused window, or `no stream` when that window has no sink
+input; the Active step never reuses the application it covered on an earlier
+pass, so an application that stopped playing cannot keep painting the OSD. Its
+name stays out of the caption, because Active covers every stream of the focused
+window, while a volume key still follows **OSD App Name**.
+
 A profile takes its icon from, in this order: its own `icon` key, when the theme
 can render it; the matched stream, through the same chain as below, when the
 profile has an `include`; and the `.desktop` file of the target identifier. The

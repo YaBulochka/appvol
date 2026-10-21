@@ -433,9 +433,6 @@ class Daemon(dbus.service.Object):
         self.profiles_path = Path(profiles_path) if profiles_path else default_profiles_path()
         self.config_path = Path(config_path) if config_path else default_config_path()
         self.shortcuts = ShortcutActions(bus, self.on_shortcut)
-        # The last application the Active profile covered: when the cycle keys
-        # land on Active, the OSD shows it instead of nothing.
-        self._last_active: tuple[str, str, int] | None = None
 
     # -- profiles ----------------------------------------------------------
 
@@ -578,18 +575,14 @@ class Daemon(dbus.service.Object):
             index = 0
         target = order[(index + step) % len(order)]
         self.state.selection.select(target, time.monotonic())
-        log.info("profile: %s", self.state.selection.current)
         profile = self.current_profile()
-        if target == ACTIVE_ID and self._last_active is not None:
-            # Landed on Active: show the last volume of the focused window, but
-            # never its name — Active covers every stream of that window.
-            _, icon, percent = self._last_active
-            log.info("cycle on active: icon %r, %s%%", icon, percent)
-            self.osd.volume_changed(
-                percent, icon=icon, name="", maximum=self._max_percent_of(active_profile())
-            )
-            return
-        self._feedback(profile, osd=True)
+        log.info("profile: %s", self.state.selection.current)
+        # Active is resolved against the focus of this moment, never against
+        # what it covered before: a cached icon or level would keep painting an
+        # application that has stopped playing, or that is no longer focused.
+        # Its name stays out of the caption, because Active covers every stream
+        # of the focused window.
+        self._feedback(profile, osd=True, name_in_caption=profile.id != ACTIVE_ID)
 
     def _switch_target(self, profile_id: str) -> Profile:
         """The profile a switch refers to; an empty id means the built-in one."""
@@ -603,8 +596,13 @@ class Daemon(dbus.service.Object):
         log.info("profile: %s", self.state.selection.current)
         return self._feedback(self.current_profile(), osd)
 
-    def _feedback(self, profile: Profile, osd: bool = True) -> dict:
-        """Report what a profile looks like now, for a profile switch."""
+    def _feedback(self, profile: Profile, osd: bool = True, name_in_caption: bool = True) -> dict:
+        """Report what a profile looks like now, for a profile switch.
+
+        ``name_in_caption`` lets the cycle keep the name of the focused window
+        out of the OSD when it lands on Active, while the volume keys still
+        follow the **OSD App Name** switch.
+        """
         streams, result = self._resolve(profile)
         by_index = {stream.index: stream for stream in streams}
         matched_streams = [by_index[index] for index in result.indices]
@@ -623,10 +621,8 @@ class Daemon(dbus.service.Object):
         if matched_streams:
             percent = int(round(max(peak(stream.volume) for stream in matched_streams) * 100))
             payload["percent"] = percent
-            if profile.mode == MODE_FOCUS:
-                self._last_active = (name, icon, percent)
             if osd:
-                caption = osd_caption(self.config.osd_show_name, name)
+                caption = osd_caption(self.config.osd_show_name and name_in_caption, name)
                 maximum = self._max_percent_of(profile)
                 if any(stream.mute for stream in matched_streams):
                     # A muted stream keeps its volume level, so a bar would
@@ -640,11 +636,12 @@ class Daemon(dbus.service.Object):
                         name=caption,
                         maximum=maximum,
                     )
-        elif profile.mode == MODE_FOCUS:
-            log.info("nothing to show for %s: %s", profile.id, result.reason)
         elif osd:
-            # A profile key press deserves an answer, even a negative one.
-            self.osd.text(icon, "no stream")
+            # A switch deserves an answer, even a negative one; silence would
+            # leave the previous OSD on screen and make it look like the new
+            # target.
+            log.info("nothing to show for %s: %s", profile.id, result.reason)
+            self.osd.text(icon or PROFILE_FALLBACK_ICON, "no stream")
         return payload
 
     def _add_profile(
@@ -1043,8 +1040,6 @@ class Daemon(dbus.service.Object):
             name, icon = self._appearance(profile, result, by_index)
             payload["osd"] = {"name": name, "icon": icon}
             log.debug("osd: %s%% with icon %r (app %r)", payload["percent"], icon, name)
-            if profile.mode == MODE_FOCUS:
-                self._last_active = (name, icon, payload["percent"] or 0)
             matched_streams = [by_index[index] for index in result.indices]
             caption = osd_caption(self.config.osd_show_name, name)
             maximum = self._max_percent_of(profile)

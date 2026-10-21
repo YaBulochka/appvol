@@ -17,6 +17,7 @@ import dbus
 
 from appvol import daemon
 from appvol.config import Config, parse as parse_config
+from appvol.focus import Focus
 from appvol.match import Stream
 from appvol.profiles import MODE_FOCUS, Profile, active_profile
 from appvol.profiles import parse as parse_profiles
@@ -327,7 +328,6 @@ class StepDaemon(daemon.Daemon):
         self.profiles_path = base / "profiles.toml"
         self.config_path = base / "config.toml"
         self.state = daemon.State()
-        self._last_active: tuple[str, str, int] | None = None
 
 
 class SetStepTest(unittest.TestCase):
@@ -659,6 +659,77 @@ class AutoModeTest(unittest.TestCase):
             visited.append(app.state.selection.current)
 
         self.assertEqual(visited, ["app-spotify", "app-firefox", "active", "app-spotify"])
+
+    def test_landing_on_active_resolves_the_current_focus(self) -> None:
+        # The Active step must describe the focused window now, not the last
+        # stream Active happened to cover.  A stale cache painted Wine for
+        # minutes after its stream was gone.
+        wine = Stream(
+            index=1,
+            props={
+                "application.process.id": "111",
+                "application.process.binary": "wine-preloader",
+                "application.name": "Engine",
+            },
+            volume=(1.0,),
+        )
+        app = self.make([wine])
+        app.osd = RecordingOsd()
+        app.state.update_focus(
+            Focus(pid=111, resource_class="wine", desktop_file_name="wine")
+        )
+        with mock.patch.object(daemon, "resolve_icon", return_value="wine-preloader"):
+            app._adjust(daemon.UP, 0.0, active_profile())
+
+        # Wine stopped playing and focus moved to a window without audio.
+        app.pulse = RecordingPulse([])
+        app.state.update_focus(Focus(pid=222, resource_class="konsole"))
+        before = len(app.osd.calls)
+        with mock.patch.object(daemon, "resolve_icon", return_value=None):
+            app._cycle_profile(1)
+
+        self.assertNotIn("wine-preloader", str(app.osd.calls[before:]))
+        self.assertEqual(app.osd.calls[-1], ("text", daemon.PROFILE_FALLBACK_ICON, "no stream"))
+
+    def test_landing_on_active_shows_the_focused_stream(self) -> None:
+        spotify = Stream(
+            index=1,
+            props={"application.process.id": "111", "application.name": "Spotify"},
+            volume=(0.4,),
+        )
+        firefox = Stream(
+            index=2,
+            props={"application.process.id": "222", "application.name": "Firefox"},
+            volume=(0.7,),
+        )
+        app = self.make(
+            [spotify, firefox], config=Config(mode="auto", osd_show_name=True)
+        )
+        app.osd = RecordingOsd()
+        app.state.update_focus(
+            Focus(pid=222, resource_class="firefox", desktop_file_name="firefox")
+        )
+        app.state.selection.select("app-spotify", 0.0)
+
+        with mock.patch.object(daemon, "resolve_icon", return_value="firefox"):
+            app._cycle_profile(-1)
+
+        self.assertEqual(app.osd.calls[-1], ("volume", 70, "firefox", "", 100))
+
+    def test_landing_on_active_without_a_stream_still_answers(self) -> None:
+        # Silence would leave the previous OSD on screen, which is exactly how
+        # the application that just left the cycle seemed to stay there.
+        app = self.make([SPOTIFY_STREAM])
+        app.osd = RecordingOsd()
+        app.state.update_focus(
+            Focus(pid=999, resource_class="konsole", desktop_file_name="org.kde.konsole")
+        )
+        app.state.selection.select("app-spotify", 0.0)
+
+        with mock.patch.object(daemon, "resolve_icon", return_value="konsole"):
+            app._cycle_profile(-1)
+
+        self.assertEqual(app.osd.calls[-1], ("text", "konsole", "no stream"))
 
     def test_an_application_target_is_resolvable(self) -> None:
         app = self.make([SPOTIFY_STREAM])
