@@ -1,4 +1,4 @@
-# Unreleased
+# appvol 0.7.2 (2026-10-21)
 
 ## Fixed
 
