@@ -25,13 +25,14 @@ import logging
 from collections.abc import Callable, Sequence
 
 import dbus
-from gi.repository import GLib
+from gi.repository import Gio, GLib
 
 log = logging.getLogger(__name__)
 
 PORTAL_SERVICE = "org.freedesktop.portal.Desktop"
 PORTAL_PATH = "/org/freedesktop/portal/desktop"
 PORTAL_IFACE = "org.freedesktop.portal.GlobalShortcuts"
+SESSION_IFACE = "org.freedesktop.portal.Session"
 REGISTRY_IFACE = "org.freedesktop.host.portal.Registry"
 REQUEST_IFACE = "org.freedesktop.portal.Request"
 
@@ -39,6 +40,13 @@ REQUEST_IFACE = "org.freedesktop.portal.Request"
 # a .desktop file, which is why desktop/org.appvol.Daemon.desktop exists; the
 # portal keys the bindings of the global shortcuts by it.
 APP_ID = "org.appvol.Daemon"
+
+# Where gnome-control-center keeps the shortcuts it bound for an application.
+# A new session starts unbound and grabs nothing until BindShortcuts is called,
+# and the portal refuses it once the session is bound; reading the store is how
+# appvol knows which ids it may claim silently and which need the dialog.
+APP_SETTINGS_SCHEMA = "org.gnome.settings-daemon.global-shortcuts.application"
+APP_SETTINGS_PATH = f"/org/gnome/settings-daemon/global-shortcuts/{APP_ID}/"
 
 REQUEST_TIMEOUT_SECONDS = 30
 
@@ -69,6 +77,10 @@ class PortalShortcuts:
         self._portal = None
         self._sender = ""
         self._subscribed = False
+        # Whether BindShortcuts was sent for the current session: the portal
+        # refuses a second one, and ConfigureShortcuts is the way after that.
+        self._bound = False
+        self._claim_on_open = True
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -110,9 +122,11 @@ class PortalShortcuts:
             # An older portal has no registry; the id then comes from the unit.
             log.debug("portal: cannot register %s: %s", APP_ID, exc.get_dbus_message())
 
-    def _open_session(self) -> None:
-        # ``session_handle_token`` is required: without it xdg-desktop-portal
-        # takes its own NULL-token assert and the service crashes.
+    def _open_session(self, claim: bool = True) -> None:
+        # ``claim`` takes over the bindings the portal already stores, without a
+        # dialog.  ``session_handle_token`` is required: without it
+        # xdg-desktop-portal takes its own NULL-token assert and crashes.
+        self._claim_on_open = claim
         self._request(
             "CreateSession",
             "a{sv}",
@@ -259,6 +273,8 @@ class PortalShortcuts:
         self.session = str(results.get("session_handle", ""))
         log.info("portal: global shortcut session %s", self.session)
         self.refresh()
+        if self._claim_on_open:
+            self._claim()
 
     def refresh(self) -> None:
         """Ask the portal what is bound right now."""
@@ -273,23 +289,44 @@ class PortalShortcuts:
         self.bound = {str(shortcut[0]) for shortcut in results.get("shortcuts", [])}
         log.debug("portal: bound shortcuts: %s", ", ".join(sorted(self.bound)) or "none")
 
-    def bind(self) -> bool:
-        """Show the binding dialog for the actions that are missing.
+    def _stored_ids(self) -> set[str]:
+        """The ids gnome-control-center already stores for this application.
 
-        The dialog is the portal's, so this returns as soon as the request is
-        sent; the answer arrives as a ``Response`` and lands in :attr:`bound`.
+        A stored id is one the user has seen in a dialog, even if the row was
+        left without a key; an id that is not here has never been offered.
         """
-        if not self.session:
-            self.error = "no portal session; global shortcuts are not available here"
-            return False
-        missing = [
-            (action, friendly)
-            for action, friendly in self._actions()
-            if action not in self.bound
-        ]
-        if not missing:
-            log.info("portal: every shortcut is already bound")
-            return True
+        try:
+            settings = Gio.Settings.new_with_path(APP_SETTINGS_SCHEMA, APP_SETTINGS_PATH)
+            value = settings.get_value("shortcuts")
+        except (GLib.Error, TypeError, AttributeError):
+            return set()
+        ids = set()
+        for item in value:
+            # PyGObject unpacks each (sa{sv}) element into a Python tuple.
+            try:
+                shortcut_id = item[0]
+            except (IndexError, TypeError):
+                continue
+            ids.add(str(shortcut_id))
+        return ids
+
+    def _claim(self) -> None:
+        """Grab the bindings the portal already stores, without a dialog.
+
+        A session starts unbound and the backend grabs nothing until
+        BindShortcuts is called, so without this every key would be dead after a
+        restart of the daemon.  Only known ids are passed: an unknown one makes
+        the provider open its dialog.
+        """
+        stored = self._stored_ids()
+        known = [(action, friendly) for action, friendly in self._actions() if action in stored]
+        if not known:
+            log.debug("portal: nothing stored to claim yet")
+            return
+        log.debug("portal: claiming %s", ", ".join(action for action, _ in known))
+        self._bind_actions(known)
+
+    def _bind_actions(self, actions: Sequence[tuple[str, str]], timeout: int | None = None) -> None:
         shortcuts = dbus.Array(
             [
                 dbus.Struct(
@@ -301,23 +338,76 @@ class PortalShortcuts:
                     ),
                     signature="(sa{sv})",
                 )
-                for action, friendly in missing
+                for action, friendly in actions
             ],
             signature="(sa{sv})",
         )
-        log.info("portal: asking for %d shortcut(s)", len(missing))
+        self._bound = True
         self._request(
             "BindShortcuts",
             "oa(sa{sv})sa{sv}",
             [self.session, shortcuts, ""],
             self._on_bind,
-            timeout=None,
+            timeout=timeout,
         )
+
+    def _reopen(self, claim: bool) -> None:
+        """Close the session and open a fresh one: a session binds only once."""
+        self._close_session()
+        self.session = ""
+        self.bound = set()
+        self._bound = False
+        self._open_session(claim=claim)
+
+    def _close_session(self) -> None:
+        if not self.session:
+            return
+        try:
+            session = dbus.Interface(
+                self.bus.get_object(PORTAL_SERVICE, self.session), SESSION_IFACE
+            )
+            session.Close(dbus_interface=SESSION_IFACE, signature="")
+        except dbus.DBusException as exc:
+            log.debug("portal: cannot close the session: %s", exc.get_dbus_message())
+
+    def bind(self) -> bool:
+        """Open the dialog that gives the actions their keys.
+
+        The portal accepts one BindShortcuts per session and nothing else, and
+        the provider skips the dialog when every id it is offered is already
+        stored.  So a new action, a profile added since the last time, starts a
+        fresh session, while a session that already knows every action edits the
+        stored bindings through ConfigureShortcuts: that is also the only way to
+        fill a row the user left empty.
+        """
+        if not self.session:
+            self.error = "no portal session; global shortcuts are not available here"
+            return False
+        stored = self._stored_ids()
+        unknown = [action for action, _ in self._actions() if action not in stored]
+        if unknown and self._bound:
+            log.info("portal: %d new shortcut(s), opening a fresh session", len(unknown))
+            self._reopen(claim=False)
+            return True
+        if self._bound:
+            log.info("portal: asking the desktop to configure the shortcuts")
+            self._request(
+                "ConfigureShortcuts",
+                "osa{sv}",
+                [self.session, ""],
+                self._on_configure,
+                timeout=None,
+            )
+            return True
+        self._bind_actions(self._actions())
         return True
 
     def _on_bind(self, code: int, results: dict) -> None:
         if code == RESPONSE_CANCELLED:
             log.info("portal: the binding dialog was cancelled")
+            # The session that asked is marked bound and grabs nothing, so come
+            # back with the bindings that were stored before the dialog.
+            self._reopen(claim=True)
             return
         if code != RESPONSE_OK:
             self.error = f"the portal refused the bindings (response {code})"
@@ -326,6 +416,17 @@ class PortalShortcuts:
         for shortcut in results.get("shortcuts", []):
             self.bound.add(str(shortcut[0]))
         log.info("portal: bound shortcuts: %s", ", ".join(sorted(self.bound)))
+
+    def _on_configure(self, code: int, results: dict) -> None:
+        if code == RESPONSE_CANCELLED:
+            log.info("portal: the configuration dialog was cancelled")
+            return
+        if code != RESPONSE_OK:
+            self.error = f"the portal refused the configuration (response {code})"
+            log.warning("portal: %s", self.error)
+            return
+        log.info("portal: shortcuts configured")
+        self.refresh()
 
     def _activated(self, session, shortcut_id, _timestamp, _options) -> None:
         if self.session and str(session) != self.session:

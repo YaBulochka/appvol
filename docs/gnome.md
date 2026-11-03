@@ -108,18 +108,30 @@ use, so a key, a profile key and a CLI command are one code path.
 
 **The portal, in practice.** At start the daemon opens a portal session,
 subscribes to `Activated` and asks `ListShortcuts` what is already bound. It
-never opens the binding dialog on its own. One command does that:
+never opens the binding dialog on its own. A session starts unbound and the
+backend grabs nothing until `BindShortcuts` is called, so the daemon also claims
+the ids the provider already stores for `org.appvol.Daemon`
+(`org.gnome.settings-daemon.global-shortcuts.application`): offering ids the
+provider knows opens no dialog, and the session grabs their keys. That is what
+keeps every bound key alive across a restart of `appvold`.
+
+One command opens the dialog:
 
 ```
 appvol shortcuts        # what is bound and what is not
-appvol shortcuts bind   # the desktop's binding dialog for the missing actions
+appvol shortcuts bind   # the desktop's binding dialog
 ```
 
-The dialog is the portal's own sheet. It lists the five fixed actions and one
-per profile, each with a description, and the bindings it stores survive a
-restart of `appvold` and of the session. A profile added later is one more
-missing action: `appvol shortcuts bind` again, which shows only what is still
-unbound. `appvol shortcuts` reports the same from the terminal.
+The portal accepts a single `BindShortcuts` per session and answers `response 2`
+to a second one. `appvol shortcuts bind` therefore switches to
+`ConfigureShortcuts` once the session is bound: the dialog shows the stored
+entries, including a row the user left empty, and saving rebinds the session. A
+profile added after the first dialog is not in the store yet, so the daemon opens
+a fresh session for that case and `BindShortcuts` offers the new action
+prefilled with the known ones.
+
+The bindings survive a restart of `appvold` and of the session. `appvol
+shortcuts` reports the same from the terminal.
 
 The daemon creates the session again when the portal restarts
 (`NameOwnerChanged` on `org.freedesktop.portal.Desktop`), and retries a session

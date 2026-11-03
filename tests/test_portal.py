@@ -68,8 +68,10 @@ class PortalTest(unittest.TestCase):
         removed.start()
         self.addCleanup(removed.stop)
         self.client = portal.PortalShortcuts(self.bus, self.pressed.append, lambda: ACTIONS)
+        self.client._stored_ids = lambda: set()
 
-    def started(self) -> portal.PortalShortcuts:
+    def started(self, stored: set[str] | None = None) -> portal.PortalShortcuts:
+        self.client._stored_ids = lambda: set(stored or ())
         self.client.start()
         self.bus.response(0, 0, {"session_handle": "/org/freedesktop/portal/session/1"})
         return self.client
@@ -120,9 +122,8 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(client.bound, {"volume_up", "volume_down"})
         self.assertEqual(client.status()["missing"], [])
 
-    def test_bind_sends_only_the_missing_actions(self) -> None:
+    def test_bind_offers_every_action_when_nothing_is_stored(self) -> None:
         client = self.started()
-        client.bound = {"volume_up"}
 
         self.assertTrue(client.bind())
 
@@ -130,16 +131,34 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(kwargs["signature"], "oa(sa{sv})sa{sv}")
         session, shortcuts, parent, _options = args
         self.assertEqual((str(session), str(parent)), (client.session, ""))
-        self.assertEqual([str(shortcut[0]) for shortcut in shortcuts], ["volume_down"])
-        self.assertEqual(str(shortcuts[0][1]["description"]), "Volume down")
+        self.assertEqual([str(shortcut[0]) for shortcut in shortcuts], ["volume_up", "volume_down"])
+        self.assertEqual(str(shortcuts[0][1]["description"]), "Volume up")
 
-    def test_binding_everything_does_not_open_the_dialog(self) -> None:
-        client = self.started()
-        client.bound = {"volume_up", "volume_down"}
-        calls = len(self.portal_gate.calls)
+    def test_a_restart_claims_the_stored_bindings_without_a_dialog(self) -> None:
+        client = self.started(stored={"volume_up"})
+
+        method, args, _kwargs = self.call("BindShortcuts")
+        shortcuts = args[1]
+        self.assertEqual([str(shortcut[0]) for shortcut in shortcuts], ["volume_up"])
+
+    def test_a_new_action_opens_a_fresh_session(self) -> None:
+        client = self.started(stored={"volume_up"})
 
         self.assertTrue(client.bind())
-        self.assertEqual(len(self.portal_gate.calls), calls)
+
+        methods = [call[0] for call in self.portal_gate.calls]
+        self.assertIn("Close", methods)
+        self.assertEqual(methods.count("CreateSession"), 2)
+
+    def test_a_known_session_asks_for_the_configuration_dialog(self) -> None:
+        client = self.started(stored={"volume_up", "volume_down"})
+
+        self.assertTrue(client.bind())
+
+        method, args, kwargs = self.call("ConfigureShortcuts")
+        self.assertEqual(kwargs["signature"], "osa{sv}")
+        self.assertEqual(str(args[0]), client.session)
+        self.assertEqual([call[0] for call in self.portal_gate.calls].count("CreateSession"), 1)
 
     def test_a_successful_bind_adds_the_ids(self) -> None:
         client = self.started()

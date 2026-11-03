@@ -43,6 +43,17 @@
   profile** and **Previous profile** through the new `CycleProfile(direction)`
   D-Bus method, so a desktop without KGlobalAccel can bind its own keys to them.
 
+## Fixed
+
+- The GNOME portal client keeps the bound keys alive across a restart of
+  `appvold`: the new session claims the ids the provider already stores, which
+  opens no dialog, instead of leaving every key dead until the next bind.
+- `appvol shortcuts bind` opens the dialog again after the first time. GNOME
+  accepts one `BindShortcuts` per session and refused the second request with
+  `response 2`; the client now switches to `ConfigureShortcuts`, which is also
+  the only way to fill a row that was left empty. A profile added later still
+  goes through a fresh session, because its id is not in the store yet.
+
 # appvol 0.7.3 (2026-11-03)
 
 ## Fixed
