@@ -7,6 +7,7 @@ what the step of a row writes.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -294,6 +295,80 @@ class CycleProfileTest(unittest.TestCase):
         app._cycle_profile(1)
         self.assertEqual(app.state.selection.current, "active")
 
+    def test_the_cycle_answers_with_the_feedback_of_its_target(self) -> None:
+        app = self.make([Profile(id="spotify"), Profile(id="cs2")])
+        answer = app._cycle_profile(1)
+        self.assertIs(answer, app._feedback.return_value)
+
+
+class ShortcutTableTest(unittest.TestCase):
+    """The portal binds the same action names KGlobalAccel registers."""
+
+    def test_the_table_is_the_five_fixed_actions_and_one_per_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp), [Profile(id="spotify", name="Spotify")])
+            table = dict(app.shortcut_actions())
+
+        self.assertEqual(table[daemon.ACTION_VOLUME_UP], "Volume up")
+        self.assertEqual(table[daemon.ACTION_NEXT_PROFILE], "Next profile")
+        self.assertEqual(table[daemon.action_name("spotify")], "Spotify")
+
+    def test_without_a_portal_every_action_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp), [Profile(id="spotify")])
+            status = app.shortcuts_status()
+
+        self.assertFalse(status["available"])
+        self.assertIn(daemon.ACTION_VOLUME_UP, status["missing"])
+        self.assertIn(daemon.action_name("spotify"), status["missing"])
+
+
+class KWinLoadTest(unittest.TestCase):
+    """A desktop without KWin (GNOME, a tiling setup) must not retry forever."""
+
+    def manager(self, present: bool) -> daemon.KWinManager:
+        bus = mock.Mock()
+        bus.name_has_owner.return_value = present
+        return daemon.KWinManager(bus, Path("/nonexistent/appvol.js"))
+
+    def test_a_missing_kwin_schedules_nothing(self) -> None:
+        with mock.patch.object(daemon.GLib, "timeout_add") as add:
+            self.manager(False).schedule_load()
+        add.assert_not_called()
+
+    def test_a_present_kwin_is_loaded(self) -> None:
+        manager = self.manager(True)
+        with mock.patch.object(daemon.GLib, "timeout_add") as add:
+            manager.schedule_load()
+        add.assert_called_once_with(daemon.KWIN_RETRY_DELAY_MS, manager._retry_load)
+
+
+class CycleProfileMethodTest(unittest.TestCase):
+    """``appvol profile next`` reaches the same walk as the keys.
+
+    The client outside KGlobalAccel has no access to the shortcut actions, so the
+    direction has to be a method of its own.
+    """
+
+    def test_next_and_previous_pass_the_step_to_the_cycle(self) -> None:
+        app = mock.Mock()
+        app._cycle_profile.return_value = {"ok": True, "current": "spotify"}
+
+        answer = json.loads(daemon.Daemon.CycleProfile(app, "next"))
+        self.assertEqual(answer, {"ok": True, "current": "spotify"})
+        app._cycle_profile.assert_called_once_with(1)
+
+        app._cycle_profile.reset_mock()
+        daemon.Daemon.CycleProfile(app, "previous")
+        app._cycle_profile.assert_called_once_with(-1)
+
+    def test_an_unknown_direction_is_refused(self) -> None:
+        app = mock.Mock()
+        with self.assertRaises(dbus.DBusException) as caught:
+            daemon.Daemon.CycleProfile(app, "sideways")
+        self.assertEqual(caught.exception.get_dbus_name(), "org.appvol.Error.InvalidArgument")
+        app._cycle_profile.assert_not_called()
+
 
 class ShortcutServerRestartTest(unittest.TestCase):
     """KWin owns the shortcut server; its restart drops our registration."""
@@ -328,6 +403,7 @@ class StepDaemon(daemon.Daemon):
         self.profiles_path = base / "profiles.toml"
         self.config_path = base / "config.toml"
         self.state = daemon.State()
+        self.portal = None
 
 
 class SetStepTest(unittest.TestCase):

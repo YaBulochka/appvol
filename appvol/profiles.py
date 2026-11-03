@@ -58,6 +58,7 @@ PANEL_STREAM_NAMES = frozenset(
     {
         "bell-window-system",
         "event sounds",
+        "gnome-shell",
         "kded",
         "kwin",
         "kwin_wayland",

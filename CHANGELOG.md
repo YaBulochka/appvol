@@ -1,3 +1,48 @@
+# appvol (unreleased)
+
+## Added
+
+- **Global shortcuts on GNOME** through `org.freedesktop.portal.GlobalShortcuts`
+  (version 2 on GNOME 51). The daemon opens a portal session at start, listens
+  for `Activated` and routes the action ids through the same code the KGlobalAccel
+  keys use. `appvol shortcuts` reports what is bound, `appvol shortcuts bind`
+  opens the desktop's binding sheet for the actions that are missing, including
+  one per profile. The session is recreated when the portal restarts, and a
+  refused session is retried while the portal activates.
+
+- The daemon registers itself with `org.freedesktop.host.portal.Registry` as
+  `org.appvol.Daemon` before its first portal call, and again when the portal
+  restarts. The portal stores the global shortcuts of an application under that
+  id, so the bindings no longer follow the terminal the daemon was started from;
+  `desktop/org.appvol.Daemon.desktop` is installed with the daemon because the id
+  must name a desktop entry.
+
+- **GNOME 45 and newer**, through the extension in `contrib/gnome`. It reports
+  the focused window to `appvold`, so the Active profile, auto mode and the
+  window's sliders follow the window you look at, and it exports the shell's own
+  OSD, which the shell refuses to a plain client. `osd_backend = "auto"` now
+  tries Plasma's OSD, then the GNOME one, then notifications.
+  [docs/gnome.md](docs/gnome.md) has the install and the shortcut plan.
+
+- On a desktop without KWin the daemon no longer retries the KWin script, and a
+  missing KGlobalAccel is a debug line instead of a warning, so a GNOME session
+  starts clean. `gnome-shell` is filtered out of "every application stream" like
+  `plasmashell` on Plasma.
+
+- The OSD falls back to the freedesktop notification daemon when the Plasma OSD
+  is not on the bus, so a session without Plasma (or one whose plasmashell just
+  restarted) still gets feedback from `appvol up`, a profile key or `appvol
+  profile next`. The notification replaces itself instead of stacking, carries
+  the application icon, the percentage as its progress hint, and says "Muted" at
+  zero. `osd_backend` in `config.toml` pins a display: `auto` (Plasma, then
+  notifications), `plasma` or `notifications`.
+
+- `appvol profile next` and `appvol profile prev` walk the targets the keys
+  cycle, the built-in Active profile first, wrapping around, with the OSD
+  feedback of the target they land on. They reach the same order as **Next
+  profile** and **Previous profile** through the new `CycleProfile(direction)`
+  D-Bus method, so a desktop without KGlobalAccel can bind its own keys to them.
+
 # appvol 0.7.3 (2026-11-03)
 
 ## Fixed

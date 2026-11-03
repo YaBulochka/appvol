@@ -12,13 +12,14 @@ from dataclasses import dataclass
 from typing import Callable
 
 # resourceClass / desktopFileName values that never belong to an application.
-PANEL_RESOURCE_CLASSES = frozenset({"plasmashell"})
+PANEL_RESOURCE_CLASSES = frozenset({"plasmashell", "gnome-shell"})
 PANEL_DESKTOP_FILES = frozenset(
     {
         "org.kde.plasmashell",
         "org.kde.kdesktop",
         "org.kde.kwin.desktop",
         "org.kde.kwin",
+        "org.gnome.shell",
     }
 )
 

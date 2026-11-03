@@ -44,6 +44,7 @@ data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
 install_dir="$prefix/share/appvol"
 unit="$config_home/systemd/user/appvold.service"
 gui_entry="$data_home/applications/org.appvol.gui.desktop"
+daemon_entry="$data_home/applications/org.appvol.Daemon.desktop"
 gui_icon="$prefix/share/icons/hicolor/scalable/apps/appvol.svg"
 
 usage() {
@@ -176,7 +177,7 @@ uninstall() {
     for name in appvol appvold appvol-gui; do
         rm -f "$destdir$prefix/bin/$name"
     done
-    rm -f "$destdir$gui_entry" "$destdir$gui_icon"
+    rm -f "$destdir$gui_entry" "$destdir$daemon_entry" "$destdir$gui_icon"
     rm -rf "$destdir$install_dir"
     # Only succeeds when nothing else lives there.
     rmdir "$destdir$prefix/bin" "$destdir$prefix/share" 2>/dev/null || true
@@ -243,6 +244,12 @@ echo "appvol: launchers linked into $destdir$prefix/bin"
 install -d "$destdir$(dirname "$unit")"
 sed "s|@APPVOLD@|$install_dir/bin/appvold|" "$root/systemd/appvold.service.in" >"$destdir$unit"
 echo "appvol: systemd user unit installed as $destdir$unit"
+
+# The portal reads this entry to name the daemon when it stores the global
+# shortcuts, so it is installed with or without the window.
+install -d "$destdir$(dirname "$daemon_entry")"
+sed "s|@APPVOLD@|$install_dir/bin/appvold|" \
+    "$root/desktop/org.appvol.Daemon.desktop.in" >"$destdir$daemon_entry"
 
 if want_gui; then
     install -d "$destdir$(dirname "$gui_entry")"

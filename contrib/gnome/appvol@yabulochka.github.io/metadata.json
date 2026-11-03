@@ -1,0 +1,8 @@
+{
+  "uuid": "appvol@yabulochka.github.io",
+  "name": "Appvol",
+  "description": "Reports the focused window to appvold, so the Appvol volume keys follow the window you look at, and shows its OSD. Requires appvold to run.",
+  "url": "https://github.com/YaBulochka/appvol",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "version": 1
+}

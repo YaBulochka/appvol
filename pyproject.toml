@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "appvol"
-description = "Volume control for the audio streams of the focused window (KDE Plasma 6 on Wayland)"
+description = "Volume control for the audio streams of the focused window (KDE Plasma 6 and GNOME on Wayland)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

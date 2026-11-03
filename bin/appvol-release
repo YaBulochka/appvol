@@ -67,7 +67,11 @@ for required in \
     "appvol-$version/appvol/__init__.py" \
     "appvol-$version/appvol/gui/qml/Main.qml" \
     "appvol-$version/kwin/appvol.js" \
+    "appvol-$version/contrib/gnome/appvol@yabulochka.github.io/metadata.json" \
+    "appvol-$version/contrib/gnome/appvol@yabulochka.github.io/extension.js" \
+    "appvol-$version/docs/gnome.md" \
     "appvol-$version/desktop/org.appvol.gui.desktop.in" \
+    "appvol-$version/desktop/org.appvol.Daemon.desktop.in" \
     "appvol-$version/desktop/icons/hicolor/scalable/apps/appvol.svg" \
     "appvol-$version/systemd/appvold.service.in" \
     "appvol-$version/install.sh" \
@@ -136,7 +140,7 @@ fi
 # drag the whole desktop onto a machine that only wants the CLI.
 url="https://github.com/YaBulochka/appvol"
 maintainer="appvol contributors <noreply@github.com>"
-description="Volume control for the audio streams of the focused window (KDE Plasma 6 on Wayland)"
+description="Volume control for the audio streams of the focused window (KDE Plasma 6 and GNOME on Wayland)"
 
 # Both trees come from the release archive, so only tracked files reach a package
 # and what is installed matches the tarball exactly.

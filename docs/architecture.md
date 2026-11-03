@@ -32,6 +32,15 @@ active window is missing, has no pid, or is of type desktop or dock. It must sta
 dependency free: the daemon injects the file into KWin, which only gives it
 `callDBus`.
 
+**The GNOME extension**
+([`contrib/gnome/`](../contrib/gnome)) plays the same part in a GNOME session,
+where the shell gives neither the focus nor its OSD to a plain client. It pushes
+`SetFocus` on every `notify::focus-window`, taking `pid` from Meta, the class
+from the Wayland `app_id`, the identifier from `Shell.WindowTracker` and the
+title from the window, and it exports `org.appvol.GnomeShell`, which the daemon
+calls to draw the shell's OSD through `Main.osdWindowManager`. No module of the
+daemon imports it; it speaks D-Bus only. [gnome.md](gnome.md) has the detail.
+
 **`appvol`** ([`appvol/cli.py`](../appvol/cli.py)) is thin by design. One D-Bus
 call, no focus lookup, no KWin, no PipeWire. A key press costs a single round trip
 on the session bus, about 35 ms end to end including the interpreter start.
@@ -53,6 +62,7 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `SetStep(profile, step)` | `sd -> s` | window | JSON: the profiles after the change, with the global step for Active |
 | `SetMode(mode)` | `s -> s` | client, window | JSON: the profiles after the change, `mode` written to `config.toml` |
 | `ToggleProfile(profile)` | `s -> s` | client, keys | switch the profile, answer describes the OSD |
+| `CycleProfile(direction)` | `s -> s` | client | the next or the previous target, answer describes the OSD |
 | `SwitchProfile(profile, osd)` | `sb -> s` | window | make a profile current, the toggle without the "back" |
 | `Profiles()` | ` -> s` | client | JSON: the targets the keys cycle, and the current one |
 | `Overview()` | ` -> s` | window | JSON: every profile plus its live volume, mute and match count |
@@ -61,6 +71,14 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `RemoveProfile(id)` | `s -> s` | client, window | JSON: the profiles after the change |
 | `Reload()` | ` -> s` | client | read `profiles.toml` again |
 | `List()` | ` -> s` | client | JSON: config, profile, focus, match, streams, OSD appearance |
+
+The GNOME extension exports one object of its own, on the bus name
+`org.appvol.GnomeShell`, object `/org/appvol/GnomeShell`, interface
+`org.appvol.GnomeShell`:
+
+| Method | Signature | Called by | Effect |
+| --- | --- | --- | --- |
+| `Show(icon, label, level, max_level)` | `ssdd -> ` | daemon | the shell's OSD: icon, label, and a bar from 0 to `max_level`; both are fractions of 100%, a negative level hides the bar |
 
 An empty profile argument means the current profile, except in `ToggleProfile`
 where it means the built-in one. Errors: `org.appvol.Error.InvalidArgument` for a
@@ -84,9 +102,13 @@ three keys keep the OSD through `Adjust` and `ToggleMute`.
 `ToggleProfile` is what a key does: a second press returns to Active. The window
 needs the explicit form, so `SwitchProfile` sets the profile and never toggles
 back. Its `osd` flag says who is watching: the window passes `false`, because it
-shows the change itself. `Overview` reads PipeWire once and matches every profile
-against that snapshot; an unreachable pipewire-pulse is not fatal there, the
-profiles come back with null for the live numbers.
+shows the change itself. `CycleProfile` is the portable form of **Next profile**
+and **Previous profile**: `next` and `previous` walk the order `Profiles()`
+reports and return the feedback of the target they land on, so `appvol profile
+next` gives a desktop without KGlobalAccel the two steps the keys get. `Overview`
+reads PipeWire once and matches every profile against that snapshot; an
+unreachable pipewire-pulse is not fatal there, the profiles come back with null
+for the live numbers.
 
 ## Matching
 
@@ -111,8 +133,12 @@ so a stream-only comparison finds nothing.
 
 Focus is ignored when [`appvol/focus.py`](../appvol/focus.py) recognises a panel
 or desktop window (`plasmashell`, `org.kde.plasmashell`, `org.kde.kdesktop`,
-`org.kde.kwin.desktop`) or when there is no pid. With nothing matched, no volume
-changes and the command still exits with status 0.
+`org.kde.kwin.desktop`, `gnome-shell`, `org.gnome.shell`) or when there is no
+pid. With nothing matched, no volume changes and the command still exits with
+status 0.
+
+The fields are the same whether they come from KWin or from the GNOME extension,
+so the matcher has one input and the tests one shape.
 
 ## Profiles
 
@@ -235,6 +261,10 @@ maximum across the matched streams.
   and reloads the script, retrying up to 20 times with 500 ms in between.
   The script cannot be loaded twice under the same name, so the daemon unloads it
   first.
+* **No KWin.** The daemon asks the bus for `org.kde.KWin` before loading the
+  script and schedules nothing when it is not there, so a GNOME session starts
+  without a retry loop and a warning. A KWin that appears later still loads the
+  script; until then the focus comes from the GNOME extension.
 * **pipewire-pulse restarts.** A keepalive call runs every 15 seconds. The first
   call after a restart fails with `CallError` or `PulseDisconnected`; the daemon
   closes the connection, opens a new one and repeats the operation, so a hotkey
@@ -254,7 +284,9 @@ maximum across the matched streams.
 means the default for that key alone, with a warning in the log. `step` and
 `max_volume` are percentages, `step` may be fractional (`2.5`), `max_volume` is
 capped at 150, `osd` toggles the
-OSD, `osd_show_name` captions the application name in it, `mode` picks what the
+OSD, `osd_backend` picks how it is drawn (`auto`, `plasma`, `gnome` or
+`notifications`),
+`osd_show_name` captions the application name in it, `mode` picks what the
 keys cycle (`profiles` or `auto`), `profile_idle_timeout` is the number of
 seconds before a profile returns to Active, and `kwin_script` overrides the
 script location. The command line wins over the file (`appvol up --step 2`,

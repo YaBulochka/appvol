@@ -64,6 +64,7 @@ from .profiles import (
     validate_id,
 )
 from .profiles import default_path as default_profiles_path
+from .portal import PortalShortcuts
 from .volume import DOWN, UP, absolute, changed, peak, target_channels
 
 log = logging.getLogger("appvol.daemon")
@@ -112,6 +113,12 @@ ACTION_VOLUME_DOWN = "volume_down"
 ACTION_VOLUME_MUTE = "volume_mute"
 ACTION_NEXT_PROFILE = "next_profile"
 ACTION_PREVIOUS_PROFILE = "previous_profile"
+
+# What ``CycleProfile`` takes: the direction of the Next and Previous actions,
+# so a client outside KGlobalAccel can bind the same two steps to its own keys.
+CYCLE_NEXT = "next"
+CYCLE_PREVIOUS = "previous"
+CYCLE_STEPS: dict[str, int] = {CYCLE_NEXT: 1, CYCLE_PREVIOUS: -1}
 
 FIXED_ACTIONS: tuple[tuple[str, str], ...] = (
     (ACTION_VOLUME_UP, "Volume up"),
@@ -310,8 +317,22 @@ class KWinManager:
         self.schedule_load()
 
     def schedule_load(self) -> None:
+        if not self._service_present():
+            # A desktop without KWin, GNOME or a tiling setup for example, pushes
+            # focus from its own component; there is nothing to load and nothing
+            # to retry.  A KWin that appears later is picked up by
+            # ``on_name_owner_changed``.
+            log.debug("%s is not on the bus, leaving focus to another component", KWIN_SERVICE)
+            return
         self._retries = 0
         GLib.timeout_add(KWIN_RETRY_DELAY_MS, self._retry_load)
+
+    def _service_present(self) -> bool:
+        try:
+            return bool(self.bus.name_has_owner(KWIN_SERVICE))
+        except dbus.DBusException as exc:
+            log.debug("cannot ask the bus for %s: %s", KWIN_SERVICE, exc)
+            return False
 
     def _retry_load(self) -> bool:
         if self.load():
@@ -376,7 +397,13 @@ class ShortcutActions:
                     log.debug("cannot unregister %s: %s", action, exc)
             path = str(iface.getComponent(KGA_COMPONENT))
         except dbus.DBusException as exc:
-            log.warning("cannot register the shortcut actions: %s", exc)
+            if exc.get_dbus_name() == "org.freedesktop.DBus.Error.ServiceUnknown":
+                # GNOME, Sway and the other desktops have no kglobalacceld: the
+                # keys are bound there, to the CLI or through the global
+                # shortcuts portal.
+                log.debug("no KGlobalAccel on this desktop, leaving the keys to it")
+            else:
+                log.warning("cannot register the shortcut actions: %s", exc)
             return
         self.actions = tuple(wanted)
         self.component_path = path
@@ -433,6 +460,9 @@ class Daemon(dbus.service.Object):
         self.profiles_path = Path(profiles_path) if profiles_path else default_profiles_path()
         self.config_path = Path(config_path) if config_path else default_config_path()
         self.shortcuts = ShortcutActions(bus, self.on_shortcut)
+        # The portal client, when the session has one; Appvol wires it after
+        # construction, because it needs the daemon as its callback target.
+        self.portal: PortalShortcuts | None = None
 
     # -- profiles ----------------------------------------------------------
 
@@ -503,6 +533,31 @@ class Daemon(dbus.service.Object):
         """Register the profile actions again, after the server came back."""
         self.shortcuts.sync(self.profiles)
 
+    def shortcut_actions(self) -> list[tuple[str, str]]:
+        """The actions a desktop can bind: the five fixed ones and one per profile.
+
+        The names are the KGlobalAccel action names, so a key the portal owns and
+        a key Plasma owns run the same code through :meth:`on_shortcut`.
+        """
+        return [
+            *FIXED_ACTIONS,
+            *((action_name(profile.id), profile.display_name) for profile in self.profiles),
+        ]
+
+    def shortcuts_status(self) -> dict:
+        """The global shortcuts of this session, for the CLI and the window."""
+        actions = [action for action, _ in self.shortcut_actions()]
+        if self.portal is None:
+            return {
+                "ok": True,
+                "available": False,
+                "session": "",
+                "bound": [],
+                "missing": actions,
+                "error": "",
+            }
+        return {"ok": True, **self.portal.status()}
+
     def on_shortcut(self, action: str) -> None:
         """A key of the Appvol component was pressed."""
         if action == ACTION_VOLUME_UP:
@@ -557,6 +612,7 @@ class Daemon(dbus.service.Object):
                 "step": self.config.step,
                 "max_volume": self.config.max_volume,
                 "osd": self.config.osd,
+                "osd_backend": self.config.osd_backend,
                 "osd_show_name": self.config.osd_show_name,
                 "mode": self.config.mode,
             },
@@ -572,13 +628,14 @@ class Daemon(dbus.service.Object):
         log.info("profile: %s", self.state.selection.current)
         return self._feedback(self.current_profile(), osd)
 
-    def _cycle_profile(self, step: int) -> None:
+    def _cycle_profile(self, step: int) -> dict:
         """Switch to the next or the previous profile, with the OSD.
 
         The order is the one the window shows: the built-in Active profile first,
         then the profiles of ``profiles.toml``, or the applications that are
         playing in the auto mode.  Unlike a profile key this is a plain switch, so
-        a second press goes on instead of coming back.
+        a second press goes on instead of coming back.  The answer is the OSD
+        feedback of the target it lands on, the same payload a toggle returns.
         """
         order = [ACTIVE_ID, *(profile.id for profile in self._targets())]
         try:
@@ -594,7 +651,7 @@ class Daemon(dbus.service.Object):
         # application that has stopped playing, or that is no longer focused.
         # Its name stays out of the caption, because Active covers every stream
         # of the focused window.
-        self._feedback(profile, osd=True, name_in_caption=profile.id != ACTIVE_ID)
+        return self._feedback(profile, osd=True, name_in_caption=profile.id != ACTIVE_ID)
 
     def _switch_target(self, profile_id: str) -> Profile:
         """The profile a switch refers to; an empty id means the built-in one."""
@@ -847,6 +904,33 @@ class Daemon(dbus.service.Object):
         window that shows the change already does not need it.
         """
         return json.dumps(self._switch_profile(str(profile_id), bool(osd)))
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="s")
+    def CycleProfile(self, direction) -> str:  # noqa: N802
+        """Switch to the next or the previous target, as the keys do.
+
+        This is the portable half of Next/Previous: on a desktop without
+        KGlobalAccel the user binds a key to ``appvol profile next`` and gets the
+        same walk, the OSD included.  The order is the one ``Profiles()``
+        reports, and the answer is the OSD feedback of the target it lands on.
+        """
+        return json.dumps(self._cycle_profile(_cycle_step(direction)))
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def Shortcuts(self) -> str:  # noqa: N802
+        """Report the global shortcuts of the session and the actions they cover."""
+        return json.dumps(self.shortcuts_status())
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def BindShortcuts(self) -> str:  # noqa: N802
+        """Ask the desktop to show its key binding dialog for the missing actions."""
+        if self.portal is None or not self.portal.session:
+            raise _invalid_argument(
+                "this desktop has no global shortcuts portal; bind the keys to "
+                "appvol up, appvol down, appvol mute and appvol profile next yourself"
+            )
+        started = self.portal.bind()
+        return json.dumps({**self.shortcuts_status(), "started": started})
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def Overview(self) -> str:  # noqa: N802
@@ -1295,6 +1379,7 @@ class Daemon(dbus.service.Object):
                 "step": self.config.step,
                 "max_volume": self.config.max_volume,
                 "osd": self.config.osd,
+                "osd_backend": self.config.osd_backend,
                 "osd_show_name": self.config.osd_show_name,
                 "mode": self.config.mode,
             },
@@ -1315,6 +1400,7 @@ class Daemon(dbus.service.Object):
                 "step": self.config.step,
                 "max_volume": self.config.max_volume,
                 "osd": self.config.osd,
+                "osd_backend": self.config.osd_backend,
                 "mode": self.config.mode,
                 "profile_idle_timeout": self.config.profile_idle_timeout,
             },
@@ -1364,6 +1450,16 @@ def _direction(value: object) -> str:
     return text
 
 
+def _cycle_step(value: object) -> int:
+    """Turn a ``next``/``previous`` direction into the step of the cycle."""
+    text = str(value).strip().lower()
+    if text not in CYCLE_STEPS:
+        raise _invalid_argument(
+            f"direction must be {CYCLE_NEXT!r} or {CYCLE_PREVIOUS!r}, got {str(value)!r}"
+        )
+    return CYCLE_STEPS[text]
+
+
 def _amount(value: object, what: str = "step") -> float:
     """Validate a non-negative number of percent."""
     try:
@@ -1404,8 +1500,11 @@ class Appvol:
         # do_not_queue: a second daemon must fail instead of waiting for the name.
         self.bus_name = dbus.service.BusName(BUS_NAME, self.bus, do_not_queue=True)
         self.pulse = PulseManager()
-        self.osd = Osd(config.osd)
+        self.osd = Osd(config.osd, backend=config.osd_backend)
         self.daemon = Daemon(self.bus, config, self.pulse, self.osd, profiles_path, config_path)
+        self.daemon.portal = PortalShortcuts(
+            self.bus, self.daemon.on_shortcut, self.daemon.shortcut_actions
+        )
         script_path = Path(config.kwin_script).expanduser() if config.kwin_script else find_kwin_script()
         self.kwin = KWinManager(self.bus, script_path)
         self.loop = GLib.MainLoop()
@@ -1441,6 +1540,8 @@ class Appvol:
         self.kwin.schedule_load()
         self.pulse.keepalive()
         self.daemon.load_profiles()
+        if self.daemon.portal is not None:
+            self.daemon.portal.start()
         self._keepalive_id = GLib.timeout_add_seconds(PULSE_KEEPALIVE_SECONDS, self._keepalive)
         self._profile_check_id = GLib.timeout_add_seconds(
             PROFILE_CHECK_SECONDS, self._check_profile_timeout

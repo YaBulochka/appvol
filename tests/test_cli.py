@@ -7,10 +7,12 @@ import io
 import unittest
 
 from appvol.cli import (
+    CYCLE_DIRECTIONS,
     _print_applications,
     _print_list,
     _print_mode,
     _print_profiles,
+    _print_shortcuts,
     _short,
     build_parser,
 )
@@ -51,6 +53,22 @@ class ParserTests(unittest.TestCase):
         )
         self.assertEqual(build_parser().parse_args(["profile", "rm", "cs2"]).id, "cs2")
 
+    def test_profile_next_and_prev_take_no_argument(self) -> None:
+        self.assertEqual(build_parser().parse_args(["profile", "next"]).profile_command, "next")
+        self.assertEqual(build_parser().parse_args(["profile", "prev"]).profile_command, "prev")
+
+    def test_shortcuts_takes_an_optional_bind(self) -> None:
+        self.assertIsNone(build_parser().parse_args(["shortcuts"]).shortcuts_command)
+        self.assertEqual(
+            build_parser().parse_args(["shortcuts", "bind"]).shortcuts_command, "bind"
+        )
+
+    def test_the_client_speaks_the_directions_the_daemon_takes(self) -> None:
+        from appvol import daemon
+
+        for direction in CYCLE_DIRECTIONS.values():
+            self.assertIn(direction, daemon.CYCLE_STEPS)
+
     def test_an_unknown_osd_name_is_refused(self) -> None:
         with self.assertRaises(SystemExit):
             build_parser().parse_args(["profile", "add", "x", "--osd-name", "sometimes"])
@@ -75,6 +93,34 @@ def _render_mode(result: dict) -> str:
     with contextlib.redirect_stdout(buffer):
         _print_mode(result)
     return buffer.getvalue()
+
+
+def _render_shortcuts(result: dict) -> str:
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        _print_shortcuts(result)
+    return buffer.getvalue()
+
+
+class ShortcutTests(unittest.TestCase):
+    def test_a_portal_session_shows_what_is_missing(self) -> None:
+        text = _render_shortcuts(
+            {"available": True, "bound": ["volume_up"], "missing": ["volume_down", "profile_spotify"]}
+        )
+        self.assertIn("1 bound, 2 missing", text)
+        self.assertIn("volume_up", text)
+        self.assertIn("appvol shortcuts bind", text)
+
+    def test_a_desktop_without_a_portal_names_the_commands(self) -> None:
+        text = _render_shortcuts({"available": False, "bound": [], "missing": ["volume_up"]})
+        self.assertIn("no global shortcuts portal", text)
+        self.assertIn("appvol profile next", text)
+
+    def test_a_sent_dialog_is_named(self) -> None:
+        text = _render_shortcuts(
+            {"available": True, "bound": [], "missing": ["volume_up"], "started": True}
+        )
+        self.assertIn("binding dialog", text)
 
 
 class AnswerTests(unittest.TestCase):

@@ -26,7 +26,7 @@ _site() {
 }
 
 package_appvol() {
-    pkgdesc="Volume control for the audio streams of the focused window (KDE Plasma 6 on Wayland)"
+    pkgdesc="Volume control for the audio streams of the focused window (KDE Plasma 6 and GNOME on Wayland)"
     depends=('python' 'python-dbus' 'python-gobject' 'python-pulsectl')
     optdepends=(
         'plasma-desktop: the Plasma session the daemon drives (KWin script, OSD, shortcuts)'
@@ -90,6 +90,10 @@ package_appvol-gui() {
     install -d "$pkgdir/usr/share/applications"
     sed 's|@APPVOL_GUI@|/usr/bin/appvol-gui|g' desktop/org.appvol.gui.desktop.in \
         >"$pkgdir/usr/share/applications/org.appvol.gui.desktop"
+    # The portal names the daemon after this entry, which is where GNOME keeps
+    # the global shortcuts it binds.
+    sed 's|@APPVOLD@|/usr/bin/appvold|g' desktop/org.appvol.Daemon.desktop.in \
+        >"$pkgdir/usr/share/applications/org.appvol.Daemon.desktop"
 
     # The app icon the entry names.  The hicolor cache is refreshed by the
     # gtk-update-icon-cache pacman hook, so nothing extra is needed here.

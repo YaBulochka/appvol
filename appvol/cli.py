@@ -27,6 +27,9 @@ EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_USAGE = 2
 
+# The subcommand of ``appvol profile`` and the direction ``CycleProfile`` takes.
+CYCLE_DIRECTIONS = {"next": "next", "prev": "previous"}
+
 
 def _add_profile_option(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -103,7 +106,18 @@ def build_parser() -> argparse.ArgumentParser:
     remove.add_argument("id")
     toggle = actions.add_parser("toggle", help="switch to a profile, or back to Active")
     toggle.add_argument("id", help="profile id, or active for the built-in profile")
+    # The portable Next/Previous: on a desktop without KGlobalAccel these are
+    # what a key is bound to, and the daemon walks the same order as the keys.
+    for name, help_text in (
+        ("next", "switch to the next profile or the next playing application"),
+        ("prev", "switch to the previous profile or playing application"),
+    ):
+        actions.add_parser(name, help=help_text)
     actions.add_parser("reload", help="read profiles.toml again after a hand edit")
+
+    shortcuts = sub.add_parser("shortcuts", help="the global shortcuts of the desktop")
+    shortcut_actions = shortcuts.add_subparsers(dest="shortcuts_command")
+    shortcut_actions.add_parser("bind", help="show the desktop's key binding dialog")
     return parser
 
 
@@ -237,6 +251,25 @@ def _print_mode(result: dict) -> None:
     print(f"mode: {mode} (cycling {scope})")
 
 
+def _print_shortcuts(result: dict) -> None:
+    if result.get("started"):
+        print("the desktop shows its binding dialog")
+    if not result.get("available"):
+        print("shortcuts: no global shortcuts portal on this desktop")
+        if result.get("error"):
+            print(f"  {result['error']}")
+        print("  bind keys to: appvol up, appvol down, appvol mute, appvol profile next")
+        return
+    bound = result.get("bound", [])
+    missing = result.get("missing", [])
+    print(f"shortcuts: {len(bound)} bound, {len(missing)} missing")
+    if bound:
+        print(f"  bound:   {', '.join(bound)}")
+    if missing and not result.get("started"):
+        print(f"  missing: {', '.join(missing)}")
+        print("  bind them with: appvol shortcuts bind")
+
+
 def _profile(proxy, args) -> tuple[dict, str]:
     """Run a ``profile`` subcommand; returns the payload and how to print it."""
     if args.profile_command == "list":
@@ -258,6 +291,9 @@ def _profile(proxy, args) -> tuple[dict, str]:
         return json.loads(proxy.Reload()), "profiles"
     if args.profile_command == "toggle":
         return json.loads(proxy.ToggleProfile(args.id)), "short"
+    if args.profile_command in CYCLE_DIRECTIONS:
+        direction = CYCLE_DIRECTIONS[args.profile_command]
+        return json.loads(proxy.CycleProfile(direction)), "short"
     print(f"appvol: unknown profile command {args.profile_command}", file=sys.stderr)
     raise SystemExit(EXIT_USAGE)
 
@@ -301,6 +337,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 result = json.loads(proxy.Profiles())
             kind = "mode"
+        elif args.command == "shortcuts":
+            if args.shortcuts_command == "bind":
+                result = json.loads(proxy.BindShortcuts())
+            else:
+                result = json.loads(proxy.Shortcuts())
+            kind = "shortcuts"
         elif args.command == "profile":
             result, kind = _profile(proxy, args)
         else:  # pragma: no cover - argparse enforces the set
@@ -326,6 +368,8 @@ def main(argv: list[str] | None = None) -> int:
         _print_mode(result)
     elif kind == "profiles":
         _print_profiles(result)
+    elif kind == "shortcuts":
+        _print_shortcuts(result)
     else:
         print(_short(result))
     return EXIT_OK

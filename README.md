@@ -17,7 +17,8 @@
 
 </div>
 
-Per-application volume control by hotkey for **KDE Plasma 6.8 (Wayland, PipeWire)**.
+Per-application volume control by hotkey for **KDE Plasma 6.8** and **GNOME 45+**
+(Wayland, PipeWire).
 
 Press a key, and appvol changes the volume of every audio stream that belongs to
 the application whose window is focused, showing the stock KDE OSD. **Profiles**
@@ -84,6 +85,8 @@ applications:
 appvol profile add spotify --include spotify --name Spotify
 appvol profile add desktop --exclude spotify --name "Everything but Spotify"
 appvol profile toggle spotify   # or press its key; press again to go back
+appvol profile next             # step to the next target, the same walk as the keys
+appvol profile prev             # and back, wrapping around
 appvol profile list             # what exists, and which profile is current
 appvol up --profile spotify     # one call, without switching to it
 ```
@@ -106,7 +109,9 @@ window.
 
 **Next profile** and **Previous profile** walk through the built-in Active profile
 and your profiles in the order the window lists them, wrapping around. Five
-minutes without a key press return the keys to the Active profile.
+minutes without a key press return the keys to the Active profile. The same walk
+is on the command line, OSD included: `appvol profile next` and `appvol profile
+prev` are what a desktop without KGlobalAccel can bind its own keys to.
 
 ### Auto mode
 
@@ -146,11 +151,35 @@ hotkeys keep running.
 
 Details in [docs/gui.md](docs/gui.md).
 
+## GNOME
+
+GNOME 45 and newer need one extension, in
+[`contrib/gnome/`](contrib/gnome). It supplies the two pieces a GNOME session
+keeps to itself: the focused window and the native OSD. The daemon, the CLI and
+the profiles are the same. Tested on **GNOME Shell 51.1**, Wayland. Start the
+daemon and install the extension:
+
+```
+systemctl --user enable --now appvold
+./contrib/gnome/install.sh --link
+```
+
+Log out and back in once: a Wayland shell scans the extensions folder at start
+and cannot be reloaded. The extension reports the focused window to the daemon
+and draws its OSD. The keys come from the desktop's own global shortcuts portal:
+`appvol shortcuts bind` opens its sheet once, and `appvol shortcuts` reports
+what is bound. [docs/gnome.md](docs/gnome.md) covers the extension, the portal
+and the custom shortcuts used where there is no portal.
+
 ## Requirements
 
-Tested on **KDE Plasma 6.8, Wayland session**; Plasma 5 is not supported. The
-session provides `kwin` (focus), `plasmashell` (OSD), `kglobalacceld` and System
-Settings (hotkeys), and PipeWire with `pipewire-pulse`.
+Tested on **KDE Plasma 6.8** and **GNOME Shell 51.1**, Wayland sessions; Plasma 5
+is not supported. On Plasma the session provides `kwin` (focus), `plasmashell`
+(OSD), `kglobalacceld` and System Settings (hotkeys). On GNOME the extension
+reports the focus and draws the OSD, and the keys come from the global shortcuts
+portal. Either way PipeWire with `pipewire-pulse` is required. Without a native
+OSD the same messages come through the desktop's notification daemon:
+`osd_backend = "auto"` in `config.toml` is the default.
 
 The packages pull in everything else. Only the no-root `install.sh` route needs
 these Python modules by hand, and prints the command for your distribution:
@@ -336,6 +365,7 @@ rpm-ostree uninstall appvol appvol-gui  # Fedora Atomic, e.g. Bazzite; reboot
 - [docs/gui.md](docs/gui.md): the window
 - [docs/architecture.md](docs/architecture.md): components, D-Bus API, matching, lifecycle
 - [docs/osd.md](docs/osd.md): the OSD and how the application icon is chosen
+- [docs/gnome.md](docs/gnome.md): GNOME support, the extension and the shortcuts
 - [docs/plasma-notes.md](docs/plasma-notes.md): what Plasma actually does
 - [docs/development.md](docs/development.md): layout, tests, release process
 

@@ -226,6 +226,7 @@ class StepTests(unittest.TestCase):
 class PanelFilterTests(unittest.TestCase):
     def test_the_shell_is_recognised(self) -> None:
         self.assertTrue(is_panel_stream(PLASMA))
+        self.assertTrue(is_panel_stream(stream(6, **{"application.name": "gnome-shell"})))
         self.assertTrue(is_panel_stream(stream(5, **{"application.name": "Event Sounds"})))
 
     def test_applications_are_not(self) -> None:

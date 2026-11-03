@@ -1,11 +1,57 @@
 # OSD and application icons
 
 A hotkey press shows the application icon and a volume bar with the percent, in
-the stock KDE OSD. Above 100% the bar gives way to the percentage, see below.
+the stock OSD of the desktop: Plasma's, GNOME's, or the notification daemon of
+anything else. Above 100% the bar gives way to the percentage, see below.
+
+## Backends
+
+[`appvol/osd.py`](../appvol/osd.py) has one small class per display, all of them
+offering `volume_changed(value, icon, name, maximum)` and `text(icon, text)`:
+
+* `PlasmaOsd` talks to
+  `org.freedesktop.Notifications /org/kde/osdService org.kde.osdService`, the
+  native OSD of a Plasma session.
+* `GnomeOsd` talks to `org.appvol.GnomeShell /org/appvol/GnomeShell`, the object
+  the [GNOME extension](gnome.md) exports. The shell refuses
+  `org.gnome.Shell.ShowOSD` to every client outside gnome-settings-daemon and
+  the portals, so the extension draws the same OSD from inside the shell.
+* `NotificationOsd` talks to
+  `org.freedesktop.Notifications /org/freedesktop/Notifications`, the interface
+  behind dunst, mako, swaync, GNOME Shell and plasmashell's own notification
+  service. It is the fallback every desktop has, and the reason appvol is useful
+  on a tiling setup before it has a native OSD of its own.
+
+`osd_backend` in `config.toml` picks one: `auto` (the default) tries the Plasma
+OSD, then the GNOME one, then notifications, and moves on at the first
+`ServiceUnknown`, `UnknownMethod` or similar answer. Nothing is cached, so a
+session whose shell or plasmashell restarts is back on its native OSD within one
+key press. `plasma`, `gnome` and `notifications` pin one backend. A new desktop
+backend is one more class with those two methods, and nothing outside this
+module has to know which one is in use.
+
+The order costs one failed call on a session that lacks the earlier backend:
+about 0.2 ms on the session bus for Plasma on a GNOME desktop. That is the price
+of not caching, and it buys the restart resilience.
+
+The GNOME OSD takes an icon, a label and a bar level. appvol sends the profile
+name as the label when **OSD App Name** is on, the percent as a fraction of the
+profile's ceiling (`0.42`, with `1.5` for a 150% profile), and `label = "Muted"`
+with no bar at zero, which is what the shell's own mute OSD shows. The shell
+declares its bar value as 0 to 2, so a percentage there is out of range and
+every update after the first would be dropped.
+
+The fallback is one notification per appvol process: each update passes the id of
+the last answer as `replaces_id`, so holding a volume key moves one popup instead
+of stacking a hundred. The `value` hint carries the percent for the progress bar
+that dunst, mako and GNOME Shell draw, and the timeout is 1.5 seconds, close to
+how long the Plasma OSD stays. The summary is the application name, or "Volume"
+when there is none; the body is the percentage, or "Muted" at zero, matching the
+Plasma caption.
 
 ## Methods
 
-[`appvol/osd.py`](../appvol/osd.py) talks to
+`PlasmaOsd` talks to
 `org.freedesktop.Notifications /org/kde/osdService org.kde.osdService`:
 
 * `mediaPlayerVolumeChanged(percent, name, icon)` draws `icon` with a progress
@@ -140,5 +186,7 @@ and keeps sending there. A cached proxy therefore keeps talking to a
 `ServiceUnknown: The name is not activatable` while the volume still changes,
 which is visible only in the log. The proxy is created with
 `follow_name_owner_changes=True` (the call goes to the well-known name and the bus
-picks the owner), and a failed call is retried once over a fresh proxy.
-[`tests/test_osd.py`](../tests/test_osd.py) pins both down.
+picks the owner), and a failed call is retried once over a fresh proxy. When the
+retry fails too, the message is not lost: `auto` sends it through the
+notification daemon, and the next key press asks Plasma again.
+[`tests/test_osd.py`](../tests/test_osd.py) pins all three down.

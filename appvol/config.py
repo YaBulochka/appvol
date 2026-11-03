@@ -28,6 +28,21 @@ MODE_AUTO = "auto"
 MODES = (MODE_PROFILES, MODE_AUTO)
 DEFAULT_MODE = MODE_PROFILES
 
+# Which on-screen display appvol shows.  ``auto`` uses the native one of the
+# session, the Plasma OSD or the GNOME one, and falls back to the freedesktop
+# notification daemon when neither is there; the other three pin a backend.
+OSD_BACKEND_AUTO = "auto"
+OSD_BACKEND_PLASMA = "plasma"
+OSD_BACKEND_GNOME = "gnome"
+OSD_BACKEND_NOTIFICATIONS = "notifications"
+OSD_BACKENDS = (
+    OSD_BACKEND_AUTO,
+    OSD_BACKEND_PLASMA,
+    OSD_BACKEND_GNOME,
+    OSD_BACKEND_NOTIFICATIONS,
+)
+DEFAULT_OSD_BACKEND = OSD_BACKEND_AUTO
+
 
 def default_path() -> Path:
     """Return the configuration path, honouring ``XDG_CONFIG_HOME``."""
@@ -39,18 +54,21 @@ def default_path() -> Path:
 class Config:
     """Runtime configuration.
 
-    ``step`` and ``max_volume`` are percentages, ``osd`` toggles the KDE OSD,
-    ``osd_show_name`` decides whether the OSD captions the application name,
-    ``mode`` picks what the keys cycle: the profiles of ``profiles.toml``
-    (``profiles``) or the applications that are playing (``auto``),
-    ``profile_idle_timeout`` is the number of seconds a profile may stay idle
-    before the keys return to the Active profile (0 disables the return), and
-    ``kwin_script`` optionally overrides the bundled KWin script location.
+    ``step`` and ``max_volume`` are percentages, ``osd`` toggles the OSD,
+    ``osd_backend`` picks the display (``auto``, ``plasma`` or
+    ``notifications``), ``osd_show_name`` decides whether the OSD captions the
+    application name, ``mode`` picks what the keys cycle: the profiles of
+    ``profiles.toml`` (``profiles``) or the applications that are playing
+    (``auto``), ``profile_idle_timeout`` is the number of seconds a profile may
+    stay idle before the keys return to the Active profile (0 disables the
+    return), and ``kwin_script`` optionally overrides the bundled KWin script
+    location.
     """
 
     step: float = DEFAULT_STEP
     max_volume: float = DEFAULT_MAX_VOLUME
     osd: bool = True
+    osd_backend: str = DEFAULT_OSD_BACKEND
     osd_show_name: bool = False
     mode: str = DEFAULT_MODE
     profile_idle_timeout: float = DEFAULT_PROFILE_IDLE_TIMEOUT
@@ -132,6 +150,7 @@ def parse(text: str) -> Config:
         step=step,
         max_volume=max_volume,
         osd=_as_bool(data.get("osd", config.osd), config.osd),
+        osd_backend=_as_choice(data.get("osd_backend"), OSD_BACKENDS, config.osd_backend),
         osd_show_name=_as_bool(data.get("osd_show_name", config.osd_show_name), config.osd_show_name),
         mode=_as_choice(data.get("mode"), MODES, config.mode),
         profile_idle_timeout=timeout,
@@ -161,6 +180,7 @@ def dumps(config: Config) -> str:
         f"step = {config.step:g}",
         f"max_volume = {config.max_volume:g}",
         f"osd = {str(config.osd).lower()}",
+        f'osd_backend = "{config.osd_backend}"',
         f"osd_show_name = {str(config.osd_show_name).lower()}",
         f'mode = "{config.mode}"',
         f"profile_idle_timeout = {config.profile_idle_timeout:g}",

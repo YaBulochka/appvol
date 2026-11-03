@@ -9,12 +9,13 @@ appvol/apps.py      pure function: streams -> the applications playing them
 appvol/profiles.py  profiles: model, profiles.toml, matcher, current selection
 appvol/volume.py    pure volume arithmetic: step, clamp, channel balance
 appvol/icon.py      icon name for the OSD, as the mixer resolves it, with a panel fallback
-appvol/osd.py       KDE OSD over D-Bus
+appvol/osd.py       the OSD backends: Plasma, GNOME, notifications
 appvol/config.py    config.toml
 appvol/daemon.py    appvold: D-Bus service, pulsectl, KWin script loader, shortcuts
 appvol/cli.py       appvol
 appvol/gui/         appvol-gui: D-Bus client, QML bridge, window (optional)
 kwin/appvol.js      KWin script, pushes the focus
+contrib/gnome/      GNOME Shell extension: focus and the native OSD
 desktop/            the window entry template and the hicolor icons
 systemd/            template of the user unit
 packaging/          PKGBUILD (split into appvol and appvol-gui) and pacman scriptlets

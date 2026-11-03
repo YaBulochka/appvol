@@ -51,6 +51,17 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(parse('mode = "shuffle"').mode, "profiles")
         self.assertEqual(parse("mode = 7").mode, "profiles")
 
+    def test_the_osd_backend_defaults_to_auto(self) -> None:
+        self.assertEqual(Config().osd_backend, "auto")
+
+    def test_the_osd_backend_is_read_case_insensitively(self) -> None:
+        self.assertEqual(parse('osd_backend = "notifications"').osd_backend, "notifications")
+        self.assertEqual(parse('osd_backend = "PLASMA"').osd_backend, "plasma")
+        self.assertEqual(parse('osd_backend = "gnome"').osd_backend, "gnome")
+
+    def test_an_unknown_osd_backend_falls_back(self) -> None:
+        self.assertEqual(parse('osd_backend = "kdialog"').osd_backend, "auto")
+
     def test_broken_toml_falls_back(self) -> None:
         self.assertEqual(parse("step = "), Config())
 
@@ -72,6 +83,7 @@ class ConfigWriteTests(unittest.TestCase):
         self.assertIn("step = 5", text)
         self.assertIn("max_volume = 100", text)
         self.assertIn("osd = true", text)
+        self.assertIn('osd_backend = "auto"', text)
         self.assertIn('mode = "profiles"', text)
         self.assertIn("profile_idle_timeout = 300", text)
 

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Appvol Daemon
+Comment=Volume control for the audio streams of the focused window
+Exec=@APPVOLD@
+Icon=appvol
+Terminal=false
+NoDisplay=true
+Categories=AudioVideo;Audio;
+Keywords=volume;audio;pipewire;
+
+# The portal takes the basename of this file as appvold's application id, and
+# that id is where GNOME stores the global shortcuts bound to it.  Nothing
+# launches this entry: the daemon runs from its systemd user unit.
