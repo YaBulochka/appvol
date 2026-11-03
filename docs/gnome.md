@@ -1,5 +1,12 @@
 # GNOME
 
+> **Experimental.** This is support written against one GNOME Shell 51.1
+> session. It is not covered by the project's tests and is maintained on a
+> best-effort basis; KDE Plasma is the supported desktop. The parts it depends on
+> (an extension, `org.freedesktop.portal.GlobalShortcuts`,
+> `org.gnome.Settings.GlobalShortcutsProvider`) can change between GNOME
+> releases.
+
 appvol runs on GNOME 45 and newer through one extension in
 [`contrib/gnome/`](../contrib/gnome). The daemon, the CLI and the window do not
 change: the extension only supplies the two things a GNOME session refuses to

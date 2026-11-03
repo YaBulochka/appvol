@@ -153,11 +153,18 @@ Details in [docs/gui.md](docs/gui.md).
 
 ## GNOME
 
+> **GNOME support is experimental and not guaranteed.** It was written against
+> one GNOME Shell 51.1 session, it is not part of what the project tests, and it
+> is maintained on a best-effort basis. KDE Plasma is the supported target. Bug
+> reports about GNOME are welcome but may go unanswered, and the API it relies on
+> (an extension, the global shortcuts portal) can change under it. There is no
+> release or tag for it: it lives on the `gnome` branch only.
+
 GNOME 45 and newer need one extension, in
 [`contrib/gnome/`](contrib/gnome). It supplies the two pieces a GNOME session
 keeps to itself: the focused window and the native OSD. The daemon, the CLI and
-the profiles are the same. Tested on **GNOME Shell 51.1**, Wayland. Start the
-daemon and install the extension:
+the profiles are the same. Only tried on **GNOME Shell 51.1**, Wayland. Start
+the daemon and install the extension:
 
 ```
 systemctl --user enable --now appvold
@@ -173,13 +180,14 @@ and the custom shortcuts used where there is no portal.
 
 ## Requirements
 
-Tested on **KDE Plasma 6.8** and **GNOME Shell 51.1**, Wayland sessions; Plasma 5
-is not supported. On Plasma the session provides `kwin` (focus), `plasmashell`
-(OSD), `kglobalacceld` and System Settings (hotkeys). On GNOME the extension
-reports the focus and draws the OSD, and the keys come from the global shortcuts
-portal. Either way PipeWire with `pipewire-pulse` is required. Without a native
-OSD the same messages come through the desktop's notification daemon:
-`osd_backend = "auto"` in `config.toml` is the default.
+Tested on **KDE Plasma 6.8**, Wayland, the supported target. On Plasma the
+session provides `kwin` (focus), `plasmashell` (OSD), `kglobalacceld` and System
+Settings (hotkeys). GNOME Shell 51.1 was used while writing the experimental
+support described above: there the extension reports the focus and draws the OSD,
+and the keys come from the global shortcuts portal. Either way PipeWire with
+`pipewire-pulse` is required. Without a native OSD the same messages come through
+the desktop's notification daemon: `osd_backend = "auto"` in `config.toml` is
+the default.
 
 The packages pull in everything else. Only the no-root `install.sh` route needs
 these Python modules by hand, and prints the command for your distribution:

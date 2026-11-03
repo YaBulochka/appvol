@@ -8,7 +8,9 @@
   keys use. `appvol shortcuts` reports what is bound, `appvol shortcuts bind`
   opens the desktop's binding sheet for the actions that are missing, including
   one per profile. The session is recreated when the portal restarts, and a
-  refused session is retried while the portal activates.
+  refused session is retried while the portal activates. This support is
+  experimental and maintained on a best-effort basis: KDE Plasma is the target
+  the project tests, and the GNOME parts can break between GNOME releases.
 
 - The daemon registers itself with `org.freedesktop.host.portal.Registry` as
   `org.appvol.Daemon` before its first portal call, and again when the portal
