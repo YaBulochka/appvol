@@ -6,7 +6,14 @@ import contextlib
 import io
 import unittest
 
-from appvol.cli import _print_applications, _print_mode, _print_profiles, _short, build_parser
+from appvol.cli import (
+    _print_applications,
+    _print_list,
+    _print_mode,
+    _print_profiles,
+    _short,
+    build_parser,
+)
 
 
 class ParserTests(unittest.TestCase):
@@ -155,6 +162,69 @@ class ProfileTableTests(unittest.TestCase):
     def test_no_profiles_yet_says_how_to_create_one(self) -> None:
         text = _render({"current": "active", "idle_timeout": 300.0, "profiles": []})
         self.assertIn("appvol profile add", text)
+
+    def test_an_empty_auto_list_does_not_offer_a_file_profile(self) -> None:
+        text = _render(
+            {
+                "current": "active",
+                "idle_timeout": 300.0,
+                "config": {"mode": "auto"},
+                "profiles": [],
+            }
+        )
+        self.assertIn("no application is playing", text)
+        self.assertNotIn("appvol profile add", text)
+
+    def test_the_table_marks_the_current_auto_target(self) -> None:
+        text = _render(
+            {
+                "current": "app-spotify",
+                "idle_timeout": 300.0,
+                "config": {"mode": "auto"},
+                "profiles": [
+                    {
+                        "id": "app-spotify",
+                        "name": "Spotify",
+                        "include": ["spotify"],
+                        "exclude": [],
+                        "step": None,
+                        "max_volume": None,
+                        "icon": "",
+                    }
+                ],
+            }
+        )
+        self.assertIn("current: app-spotify", text)
+        self.assertIn("* app-spotify", text)
+
+
+class ListTests(unittest.TestCase):
+    def render(self, profile: dict) -> str:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            _print_list(
+                {
+                    "config": {"step": 2.5, "max_volume": 100.0, "osd": True, "mode": "auto"},
+                    "profile": profile,
+                    "focus": {},
+                    "match": {},
+                    "osd": {},
+                    "streams": [],
+                }
+            )
+        return buffer.getvalue()
+
+    def test_the_current_auto_target_shows_its_id(self) -> None:
+        # The same name and scope as the file profile "spotify"; only the id tells
+        # the two apart.
+        text = self.render(
+            {"id": "app-spotify", "name": "Spotify", "mode": "streams", "include": ["spotify"]}
+        )
+        self.assertIn("profile: app-spotify 'Spotify' [streams] spotify", text)
+
+    def test_the_active_profile_shows_its_id(self) -> None:
+        text = self.render({"id": "active", "name": "Active window", "mode": "focus"})
+        self.assertIn("profile: active 'Active window' [focus] the focused window", text)
 
 
 class ModeTests(unittest.TestCase):

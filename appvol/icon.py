@@ -15,7 +15,9 @@ Two sources, in this order.
 
 2. **The window** — when the stream advertises nothing the theme knows, the
    ``Icon=`` of the window's .desktop file is used (the icon the panel shows),
-   and as a last resort the identifier itself.
+   and as a last resort the identifier itself.  A window class rarely names its
+   file directly (``spotify`` lives in ``spotify-launcher.desktop``), so the
+   entries are also searched by ``StartupWMClass``.
 
 Whether the theme can render a name is decided without Qt, by walking the icon
 theme the same way QIcon does: the theme named in ``kdeglobals``, its
@@ -162,6 +164,14 @@ def parse_icon(text: str) -> str | None:
     """Return the ``Icon=`` value of the ``[Desktop Entry]`` group."""
     for key, value in group_entries(text, DESKTOP_ENTRY_GROUP):
         if key == "Icon":
+            return value or None
+    return None
+
+
+def startup_wm_class(text: str) -> str | None:
+    """Return the ``StartupWMClass=`` value of the ``[Desktop Entry]`` group."""
+    for key, value in group_entries(text, DESKTOP_ENTRY_GROUP):
+        if key == "StartupWMClass":
             return value or None
     return None
 
@@ -367,8 +377,47 @@ def stream_icon(
     return None
 
 
+@lru_cache(maxsize=8)
+def startup_wm_class_icons(dirs: tuple[Path, ...]) -> tuple[tuple[str, str], ...]:
+    """``(window class, Icon=)`` of the entries that declare ``StartupWMClass``.
+
+    A window class rarely names its desktop file: the Spotify window is
+    ``spotify`` while the entry is ``spotify-launcher.desktop``.  The desktop
+    environment maps one to the other through this key, and a stream only carries
+    the class (``application.process.binary``), never the file name, so the same
+    mapping is needed here.  Cached for the session like the theme walks;
+    installing an application mid-session is the one case it misses.
+    """
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for directory in dirs:
+        try:
+            paths = sorted(directory.glob("*.desktop"))
+        except OSError:
+            continue
+        for path in paths:
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            class_name = desktop_file_stem(startup_wm_class(text))
+            if not class_name or class_name in seen:
+                continue
+            icon = parse_icon(text)
+            if icon:
+                seen.add(class_name)
+                found.append((class_name, icon))
+    return tuple(found)
+
+
 def desktop_file_icon(stem: str, dirs: Sequence[Path] | None = None) -> str | None:
-    """``Icon=`` of ``<stem>.desktop``, or ``None`` when no file matches."""
+    """``Icon=`` of the window's ``.desktop`` entry, or ``None`` when none matches.
+
+    The entry is ``<stem>.desktop`` when it exists.  Otherwise the entries are
+    searched for ``StartupWMClass=<stem>``, which is how a window class that is
+    named after the application (``spotify``) finds the entry that is named after
+    its launcher (``spotify-launcher.desktop``).
+    """
     stem = desktop_file_stem(stem)
     if not stem:
         return None
@@ -383,6 +432,11 @@ def desktop_file_icon(stem: str, dirs: Sequence[Path] | None = None) -> str | No
         if icon:
             return icon
         log.debug("desktop file %s has no Icon= entry", path)
+
+    for class_name, icon in startup_wm_class_icons(search_dirs):
+        if class_name == stem:
+            log.debug("icon %r comes from the StartupWMClass of %r", icon, stem)
+            return icon
     return None
 
 

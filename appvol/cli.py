@@ -142,9 +142,13 @@ def _print_profiles(result: dict) -> None:
     profiles = result.get("profiles", [])
     current = result.get("current", "")
     timeout = result.get("idle_timeout")
+    mode = result.get("config", {}).get("mode", "profiles")
     print(f"current: {current}" + (f", back to active after {timeout:g}s idle" if timeout else ""))
     if not profiles:
-        print("profiles: none  (create one with: appvol profile add spotify --include spotify)")
+        if mode == "auto":
+            print("profiles: none  (no application is playing; appvol mode profiles goes back)")
+        else:
+            print("profiles: none  (create one with: appvol profile add spotify --include spotify)")
         return
     print("profiles:")
     for profile in profiles:
@@ -174,7 +178,12 @@ def _print_list(result: dict) -> None:
         scope = ", ".join(profile.get("include", [])) or "every application stream"
         if profile.get("exclude"):
             scope += f" without {', '.join(profile['exclude'])}"
-    print(f"profile: {profile.get('name')!r} [{profile.get('mode')}] {scope}")
+    identifier = profile.get("id") or ""
+    name = profile.get("name") or identifier
+    # The id is what tells an auto target (``app-spotify``) from a file profile
+    # (``spotify``): both carry the same name and the same streams.
+    head = f"{identifier} {name!r}".strip()
+    print(f"profile: {head} [{profile.get('mode')}] {scope}")
     age = focus.get("age")
     age_text = f"{age:.1f}s ago" if isinstance(age, (int, float)) else "never"
     print(f"focus:  pid {focus.get('pid')} {focus.get('label')!r} ({age_text})")

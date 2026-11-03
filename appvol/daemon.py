@@ -539,7 +539,16 @@ class Daemon(dbus.service.Object):
             raise _invalid_argument(f"no such profile: {profile_id!r}")
         return profile
 
-    def _profiles(self) -> dict:
+    def _profiles(self, targets: bool = False) -> dict:
+        """The profiles, the current one, and the settings the keys write.
+
+        ``targets=True`` reports the targets the keys cycle.  The auto mode cycles
+        the applications that are playing, the same list ``appvol list`` uses, so
+        ``Profiles()`` asks for them: reporting the file profiles there would name
+        a ``current`` that does not appear in the list, because an auto target
+        (``app-spotify``) is not one of them.  The replies to a mutation keep the
+        file profiles, which are the ones the mutation changed.
+        """
         return {
             "ok": True,
             "current": self.state.selection.current,
@@ -551,7 +560,10 @@ class Daemon(dbus.service.Object):
                 "osd_show_name": self.config.osd_show_name,
                 "mode": self.config.mode,
             },
-            "profiles": [profile.summary() for profile in self.profiles],
+            "profiles": [
+                profile.summary()
+                for profile in (self._targets() if targets else self.profiles)
+            ],
         }
 
     def _toggle_profile(self, profile_id: str, osd: bool = True) -> dict:
@@ -856,8 +868,8 @@ class Daemon(dbus.service.Object):
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def Profiles(self) -> str:  # noqa: N802
-        """Report the profiles and which one the keys act on."""
-        return json.dumps(self._profiles())
+        """Report the targets the keys cycle and which one they act on."""
+        return json.dumps(self._profiles(targets=True))
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def Reload(self) -> str:  # noqa: N802

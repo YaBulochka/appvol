@@ -70,10 +70,11 @@ window, while a volume key still follows **OSD App Name**.
 
 A profile takes its icon from, in this order: its own `icon` key, when the theme
 can render it; the matched stream, through the same chain as below, when the
-profile has an `include`; and the `.desktop` file of the target identifier. The
-target is the first `include` entry, or, for a profile that only excludes
-applications, the first `exclude` entry. When all of them come up empty the
-generic volume icon is used, so the caption is never left without an icon.
+profile has an `include`; and the `.desktop` file of the target identifier,
+looked up by file name and by `StartupWMClass`. The target is the first `include`
+entry, or, for a profile that only excludes applications, the first `exclude`
+entry. When all of them come up empty the generic volume icon is used, so the
+caption is never left without an icon.
 
 ## Where the icon comes from
 
@@ -95,8 +96,12 @@ only.
 When the stream advertises nothing that the theme knows, appvol falls back to the
 window icon: `Icon=` of `<desktopFileName>.desktop`, then
 `<resourceClass>.desktop`, then the identifier itself when it is not
-reverse-DNS. Applications that do not advertise themselves at all (Node and
-Electron players, launcher wrappers) end up with the same icon as the panel.
+reverse-DNS. An identifier is also matched against the `StartupWMClass=` of the
+entries, because a window class rarely names its file: the Spotify window and its
+stream identify themselves as `spotify`, while the entry is
+`spotify-launcher.desktop` (which declares `StartupWMClass=spotify`). Applications
+that do not advertise themselves at all (Node and Electron players, launcher
+wrappers) end up with the same icon as the panel.
 
 Divergence from the panel is expected and is not a bug: when an application
 publishes an icon that differs from its window icon, the stream wins. Minecraft

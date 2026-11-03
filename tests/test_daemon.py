@@ -767,6 +767,32 @@ class AutoModeTest(unittest.TestCase):
 
         self.assertEqual([item.id for item in app._targets()], ["spotify"])
 
+    def test_the_profiles_report_lists_the_auto_targets(self) -> None:
+        # `appvol profile list` must name the target `current` points at; the file
+        # profiles are not part of the auto cycle.
+        app = self.make([SPOTIFY_STREAM], profiles=[Profile(id="spotify")])
+        app.state.selection.select("app-spotify", 0.0)
+
+        payload = app._profiles(targets=True)
+
+        self.assertEqual(payload["current"], "app-spotify")
+        self.assertEqual([entry["id"] for entry in payload["profiles"]], ["app-spotify"])
+
+    def test_a_mutation_reply_keeps_the_file_profiles_in_the_auto_mode(self) -> None:
+        # The reply to a write lists what the write changed, not the live cycle.
+        app = self.make([SPOTIFY_STREAM], profiles=[Profile(id="spotify")])
+
+        payload = app._profiles()
+
+        self.assertEqual([entry["id"] for entry in payload["profiles"]], ["spotify"])
+
+    def test_the_profiles_report_keeps_the_file_profiles_in_the_profiles_mode(self) -> None:
+        app = self.make([SPOTIFY_STREAM], profiles=[Profile(id="spotify")], config=Config())
+
+        payload = app._profiles(targets=True)
+
+        self.assertEqual([entry["id"] for entry in payload["profiles"]], ["spotify"])
+
     def test_switching_the_mode_writes_it_and_starts_on_active(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             app = StepDaemon(Path(tmp), [Profile(id="spotify")])

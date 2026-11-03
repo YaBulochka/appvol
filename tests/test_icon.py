@@ -45,6 +45,15 @@ DESKTOP_LAUNCHER = """\
 Icon=spotify-launcher
 """
 
+# The entry a Spotify window really maps to: the class is ``spotify``, the file
+# is named after the launcher.
+DESKTOP_SPOTIFY_LAUNCHER = """\
+[Desktop Entry]
+Name=Spotify (Launcher)
+Icon=spotify-launcher
+StartupWMClass=spotify
+"""
+
 THEME_MAIN_INDEX = """\
 [Icon Theme]
 Name=testtheme
@@ -112,6 +121,7 @@ class IconTestCase(unittest.TestCase):
         icon._theme_subdirectories.cache_clear()
         icon._has_icon.cache_clear()
         icon.theme_chain.cache_clear()
+        icon.startup_wm_class_icons.cache_clear()
 
     @staticmethod
     def _touch(path: Path) -> Path:
@@ -132,6 +142,10 @@ class DesktopFileTests(IconTestCase):
     def test_reads_icon_of_desktop_entry(self) -> None:
         self.assertEqual(icon.parse_icon(DESKTOP_KONSOLE), "utilities-terminal")
 
+    def test_reads_the_window_class_of_a_desktop_entry(self) -> None:
+        self.assertEqual(icon.startup_wm_class(DESKTOP_SPOTIFY_LAUNCHER), "spotify")
+        self.assertIsNone(icon.startup_wm_class(DESKTOP_KONSOLE))
+
     def test_ignores_comments_and_other_groups(self) -> None:
         self.assertEqual(icon.parse_icon(DESKTOP_SPOTIFY), "spotify")
         self.assertEqual(icon.parse_icon(DESKTOP_OTHER_GROUP), "real-icon")
@@ -151,6 +165,23 @@ class DesktopFileTests(IconTestCase):
     def test_desktop_file_lookup_missing(self) -> None:
         self.assertIsNone(icon.desktop_file_icon("nope", [self.applications]))
         self.assertIsNone(icon.desktop_file_icon("", [self.applications]))
+
+    def test_desktop_file_lookup_falls_back_to_the_window_class(self) -> None:
+        self._touch(self.applications / "spotify-launcher.desktop").write_text(
+            DESKTOP_SPOTIFY_LAUNCHER, encoding="utf-8"
+        )
+        self.assertEqual(
+            icon.desktop_file_icon("spotify", [self.applications]), "spotify-launcher"
+        )
+
+    def test_a_file_named_after_the_stem_wins_over_the_window_class(self) -> None:
+        self._touch(self.applications / "spotify.desktop").write_text(
+            "[Desktop Entry]\nIcon=spotify\n", encoding="utf-8"
+        )
+        self._touch(self.applications / "spotify-launcher.desktop").write_text(
+            DESKTOP_SPOTIFY_LAUNCHER, encoding="utf-8"
+        )
+        self.assertEqual(icon.desktop_file_icon("spotify", [self.applications]), "spotify")
 
 
 class ThemeLookupTests(IconTestCase):
@@ -262,6 +293,19 @@ class ResolveTests(IconTestCase):
 
     def test_bare_identifier_is_a_last_resort(self) -> None:
         self.assertEqual(self.resolve(desktop_file_name="spotify"), "spotify")
+
+    def test_a_window_class_finds_the_entry_named_after_the_launcher(self) -> None:
+        # The theme knows only the launcher icon, and the entry is named after the
+        # launcher too; StartupWMClass links the class the stream carries to it.
+        self._touch(self.applications / "spotify-launcher.desktop").write_text(
+            DESKTOP_SPOTIFY_LAUNCHER, encoding="utf-8"
+        )
+        result = self.resolve(
+            desktop_file_name="spotify",
+            props={"application.process.binary": "spotify"},
+            theme="no-such-theme",
+        )
+        self.assertEqual(result, "spotify-launcher")
 
     def test_reverse_dns_identifier_is_not_used_as_icon(self) -> None:
         self.assertIsNone(self.resolve(desktop_file_name="org.example.Nothing"))

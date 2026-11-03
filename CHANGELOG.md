@@ -1,3 +1,17 @@
+# appvol 0.7.3 (2026-11-03)
+
+## Fixed
+
+- `appvol list` prints the id of the current target, and `appvol profile list`
+  reports the auto targets while the auto mode cycles them. An auto target
+  (`app-spotify`) carries the same name and scope as a file profile (`spotify`),
+  and the two were indistinguishable in both commands.
+- An application icon is also looked up by `StartupWMClass`, so a window class
+  that is named after the application finds the entry that is named after its
+  launcher. Spotify (`spotify` → `spotify-launcher.desktop`) and Konsole
+  (`konsole` → `org.kde.konsole.desktop`) now draw their own icon in the OSD
+  instead of the generic volume one.
+
 # appvol 0.7.2 (2026-10-21)
 
 ## Fixed

@@ -54,7 +54,7 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `SetMode(mode)` | `s -> s` | client, window | JSON: the profiles after the change, `mode` written to `config.toml` |
 | `ToggleProfile(profile)` | `s -> s` | client, keys | switch the profile, answer describes the OSD |
 | `SwitchProfile(profile, osd)` | `sb -> s` | window | make a profile current, the toggle without the "back" |
-| `Profiles()` | ` -> s` | client | JSON: the profiles and the current one |
+| `Profiles()` | ` -> s` | client | JSON: the targets the keys cycle, and the current one |
 | `Overview()` | ` -> s` | window | JSON: every profile plus its live volume, mute and match count |
 | `Applications()` | ` -> s` | window editor | JSON: the applications playing now |
 | `AddProfile(id, name, include, exclude, step, max_volume, icon)` | `ssasasdds -> s` | client, window | JSON: the profiles after the change |
@@ -167,7 +167,10 @@ gone falls back to Active. An auto target carries the identifier variants the
 matcher compares, keeps the global step and ceiling, and its id is prefixed
 `app-`, so it can never be taken for the built-in profile or for one of the
 file. `profiles.toml` is not read in that mode, and a reload of it leaves the
-selection alone.
+selection alone. `Profiles()` (and so `appvol profile list`) reports the auto
+targets in that mode, and `appvol list` prints the id of the current target, so
+`app-spotify` is never mistaken for the file profile `spotify` that carries the
+same name and scope.
 
 The actions of the daemon are registered in KGlobalAccel at run time, in the
 component `appvol` (friendly name "Appvol", the entry System Settings shows): five
