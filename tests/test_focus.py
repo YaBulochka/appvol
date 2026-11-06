@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest import mock
 
 from appvol.focus import (
     Focus,
@@ -11,7 +12,9 @@ from appvol.focus import (
     focus_from_dbus,
     is_descendant,
     parse_pid,
+    parse_steam_app_id,
     read_parent_pid,
+    read_steam_app_id,
 )
 
 
@@ -47,6 +50,29 @@ class NormalisationTests(unittest.TestCase):
     def test_label(self) -> None:
         self.assertEqual(Focus(desktop_file_name="org.kde.konsole").label, "org.kde.konsole")
         self.assertEqual(Focus(caption="Konsole").label, "Konsole")
+
+
+class SteamAppIdTests(unittest.TestCase):
+    """The Steam app id of a stream owner, for a game that is not focused."""
+
+    def test_steam_app_id_is_read_from_the_environment(self) -> None:
+        data = b"HOME=/home/u\0SteamAppId=24240\0SteamGameId=24240\0"
+        self.assertEqual(parse_steam_app_id(data), "24240")
+
+    def test_steam_game_id_is_the_fallback(self) -> None:
+        self.assertEqual(parse_steam_app_id(b"SteamGameId=730\0"), "730")
+
+    def test_a_missing_or_non_numeric_id_is_empty(self) -> None:
+        self.assertEqual(parse_steam_app_id(b"HOME=/home/u\0"), "")
+        self.assertEqual(parse_steam_app_id(b"SteamAppId=not-a-number\0"), "")
+        self.assertEqual(parse_steam_app_id(b"SteamAppId=\0"), "")
+
+    def test_the_id_is_read_from_proc(self) -> None:
+        with mock.patch("appvol.focus.open", mock.mock_open(read_data=b"SteamAppId=730\0")):
+            self.assertEqual(read_steam_app_id(123), "730")
+
+    def test_an_unreadable_process_has_no_id(self) -> None:
+        self.assertEqual(read_steam_app_id(999999999), "")
 
 
 class ProcessTreeTests(unittest.TestCase):

@@ -601,6 +601,35 @@ class ProfileIconTest(unittest.TestCase):
         with mock.patch.object(daemon, "resolvable", return_value=True):
             self.assertEqual(self.icon_of(app, profile), "firefox")
 
+    def test_an_include_profile_passes_the_stream_pid_for_a_steam_icon(self) -> None:
+        game = Stream(
+            index=1,
+            props={
+                "application.process.id": "1720620",
+                "application.name": "Engine",
+                "application.process.binary": "wine-preloader",
+            },
+            volume=(0.5,),
+        )
+        profile = Profile(id="payday", include=("engine", "wine-preloader"))
+        app = self.make(profile, [game])
+
+        with mock.patch.object(
+            daemon, "resolve_icon", return_value="steam_icon_24240"
+        ) as resolve:
+            self.assertEqual(self.icon_of(app, profile), "steam_icon_24240")
+
+        self.assertEqual(resolve.call_args.kwargs["pid"], 1720620)
+
+    def test_an_exclude_profile_does_not_take_a_pid_from_a_matched_stream(self) -> None:
+        profile = Profile(id="nogame", exclude=("cs2",))
+        app = self.make(profile, [SPOTIFY_STREAM])
+
+        with mock.patch.object(daemon, "resolve_icon", return_value="cs2") as resolve:
+            self.icon_of(app, profile)
+
+        self.assertEqual(resolve.call_args.kwargs["pid"], 0)
+
 
 class AutoModeTest(unittest.TestCase):
     """The auto mode cycles the applications that are playing, in order."""
@@ -895,6 +924,27 @@ class AutoModeTest(unittest.TestCase):
             [entry["id"] for entry in overview["profiles"]], ["active", "app-spotify"]
         )
         self.assertEqual(overview["profiles"][1]["matched"], 1)
+
+    def test_a_non_focused_proton_game_keeps_its_steam_icon_in_the_overview(self) -> None:
+        game = Stream(
+            index=1,
+            props={
+                "application.process.id": "1720620",
+                "application.name": "Engine",
+                "application.process.binary": "wine-preloader",
+            },
+            volume=(0.5,),
+        )
+        app = self.make([game])
+
+        with mock.patch.object(
+            daemon, "resolve_icon", return_value="steam_icon_24240"
+        ) as resolve:
+            overview = app._overview()
+
+        steam = next(entry for entry in overview["profiles"] if entry["id"] == "app-wine-preloader")
+        self.assertEqual(steam["icon"], "steam_icon_24240")
+        self.assertEqual(resolve.call_args.kwargs["pid"], 1720620)
 
     def test_the_profiles_mode_keeps_the_file_profiles(self) -> None:
         app = self.make([SPOTIFY_STREAM], profiles=[Profile(id="spotify")], config=Config())

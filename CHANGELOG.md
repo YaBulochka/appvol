@@ -10,8 +10,10 @@
 - The icon fallback follows the window when the stream has only a placeholder:
   `audio-volume-*`, the generic audio/application icons and the shared Wine and
   Proton loaders no longer win over the `.desktop` entry. A Proton game window
-  (`steam_app_<appid>`) reaches its `steam_icon_<appid>`, and a user `.desktop`
-  entry whose icon the theme cannot render no longer hides a valid system entry.
+  (`steam_app_<appid>`) reaches its `steam_icon_<appid>` even when the game is
+  not focused: the id is also read from `SteamAppId` in the environment of the
+  process that owns its stream. A user `.desktop` entry whose icon the theme
+  cannot render no longer hides a valid system entry.
   Telegram's `org.telegram.desktop` identifier is looked up as the entry
   `org.telegram.desktop.desktop`, not as `org.telegram`.
 - The icon theme is read from `~/.config/kdedefaults/kdeglobals` when

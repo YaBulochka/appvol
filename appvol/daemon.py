@@ -960,6 +960,7 @@ class Daemon(dbus.service.Object):
             desktop_file_name=focus.desktop_file_name,
             resource_class=focus.resource_class,
             props=props,
+            pid=focus.pid,
         )
         return name, icon or ""
 
@@ -978,13 +979,19 @@ class Daemon(dbus.service.Object):
             if resolvable(profile.icon):
                 return profile.icon
             log.warning("icon %r of profile %s is not in the icon theme", profile.icon, profile.id)
+        pid = 0
         if profile.include:
-            props = by_index[result.indices[0]].props if result.indices else {}
+            first = by_index[result.indices[0]] if result.indices else None
+            props = first.props if first else {}
+            pid = first.pid if first else 0
             hint = profile.include[0]
         else:
             props = {}
             hint = profile.exclude[0] if profile.exclude else ""
-        return resolve_icon(desktop_file_name=hint, props=props) or PROFILE_FALLBACK_ICON
+        return (
+            resolve_icon(desktop_file_name=hint, props=props, pid=pid)
+            or PROFILE_FALLBACK_ICON
+        )
 
     def _step_of(self, profile: Profile, step_percent: float) -> float:
         """The step to apply: the caller's, else the profile's, else the config's."""
@@ -1247,7 +1254,12 @@ class Daemon(dbus.service.Object):
         entries = []
         for application in group_streams(streams):
             first = by_index[application.indices[0]]
-            entries.append({**application.summary(), "icon": resolve_icon(props=first.props) or ""})
+            entries.append(
+                {
+                    **application.summary(),
+                    "icon": resolve_icon(props=first.props, pid=first.pid) or "",
+                }
+            )
         return {"ok": True, "applications": entries, "current": self.state.selection.current}
 
     def _overview(self) -> dict:
@@ -1294,8 +1306,9 @@ class Daemon(dbus.service.Object):
                 )
                 if auto and not entry["builtin"] and matched_streams:
                     # An auto target has no icon of its own: the window shows the
-                    # icon of the application, from its first stream, as the OSD does.
-                    entry["icon"] = resolve_icon(props=matched_streams[0].props) or ""
+                    # icon the profile resolves, from its matched streams and
+                    # their process, the same one the OSD uses.
+                    entry["icon"] = self._profile_icon(profile, result, by_index)
             entries.append(entry)
 
         return {

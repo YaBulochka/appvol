@@ -375,6 +375,18 @@ class ResolveTests(IconTestCase):
         )
         self.assertEqual(result, "steam_icon_24240")
 
+    def test_a_non_focused_proton_game_gets_the_icon_from_its_process(self) -> None:
+        with mock.patch.object(icon, "read_steam_app_id", return_value="24240") as read:
+            result = self.resolve(
+                props={
+                    "application.name": "Engine",
+                    "application.process.binary": "wine-preloader",
+                },
+                pid=1720620,
+            )
+        read.assert_called_once_with(1720620)
+        self.assertEqual(result, "steam_icon_24240")
+
     def test_the_steam_mapping_needs_numeric_app_id(self) -> None:
         self.assertEqual(icon.steam_app_id("steam_app_24240"), "24240")
         self.assertEqual(icon.steam_app_id("steam_app_"), "")

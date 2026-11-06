@@ -34,7 +34,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Iterator, Mapping, Sequence
 
-from .focus import desktop_file_stem
+from .focus import desktop_file_stem, read_steam_app_id
 
 log = logging.getLogger(__name__)
 
@@ -565,8 +565,14 @@ def resolve(
     theme: str | None = None,
     roots: Sequence[Path] | None = None,
     pixmaps: Sequence[Path] | None = None,
+    pid: int = 0,
 ) -> str | None:
-    """Icon name for the application that owns the matched streams."""
+    """Icon name for the application that owns the matched streams.
+
+    ``pid`` is the owner of a matched stream.  It lets a Proton game keep its
+    ``steam_icon_<appid>`` when its window is not focused, because the app id
+    lives in the process environment rather than in the stream properties.
+    """
     icon = stream_icon(props, theme, roots, pixmaps)
     if icon:
         return icon
@@ -588,6 +594,13 @@ def resolve(
         candidate = f"steam_icon_{appid}" if appid else ""
         if candidate and resolvable(candidate, theme, roots, pixmaps):
             log.debug("icon %r comes from the Steam app id of %r", candidate, stem)
+            return candidate
+
+    if pid:
+        appid = read_steam_app_id(pid)
+        candidate = f"steam_icon_{appid}" if appid else ""
+        if candidate and resolvable(candidate, theme, roots, pixmaps):
+            log.debug("icon %r comes from SteamAppId of pid %d", candidate, pid)
             return candidate
 
     for stem in raw_stems:

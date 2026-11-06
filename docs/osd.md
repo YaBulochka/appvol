@@ -118,8 +118,11 @@ panel.
 
 A Proton game window is called `steam_app_<appid>` and Steam keeps its icon in
 the theme as `steam_icon_<appid>`. The stream only says `wine-preloader`, so the
-window class is the only link to the game icon; appvol resolves that before it
-settles on the generic Wine icon.
+window class is the direct link to the game icon. When the game is not focused
+there is no window to read, so appvol also reads `SteamAppId` from the
+environment of the process that owns the stream (Proton exports it to every
+process of the game). Either way it resolves the game icon before it settles on
+the generic Wine icon.
 
 Divergence from the panel is expected and is not a bug: when an application
 publishes an icon that differs from its window icon, the stream wins. Minecraft

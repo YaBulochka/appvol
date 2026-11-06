@@ -105,6 +105,35 @@ def read_parent_pid(pid: int) -> int | None:
         return None
 
 
+def parse_steam_app_id(data: bytes) -> str:
+    """The Steam app id in a ``/proc/<pid>/environ`` block, or ``""``.
+
+    Proton exports ``SteamAppId`` (and ``SteamGameId``) to every process of a
+    game, including the one that owns its sink input.  The stream properties
+    themselves do not carry the app id, so this is what links a non-focused
+    game to its ``steam_icon_<appid>``.
+    """
+    values: dict[bytes, str] = {}
+    for entry in data.split(b"\0"):
+        name, separator, value = entry.partition(b"=")
+        if not separator or name not in (b"SteamAppId", b"SteamGameId"):
+            continue
+        text = value.decode("ascii", "ignore").strip()
+        if text.isdigit():
+            values[name] = text
+    return values.get(b"SteamAppId") or values.get(b"SteamGameId") or ""
+
+
+def read_steam_app_id(pid: int) -> str:
+    """Read the Steam app id of ``pid`` from ``/proc``, or ``""``."""
+    try:
+        with open(f"/proc/{int(pid)}/environ", "rb") as handle:
+            data = handle.read()
+    except (OSError, ValueError):
+        return ""
+    return parse_steam_app_id(data)
+
+
 def is_descendant(
     pid: int,
     ancestor: int,
