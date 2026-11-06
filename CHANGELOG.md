@@ -1,25 +1,49 @@
 # appvol 0.8.0 (2026-11-06)
 
+This release closes the two follow-ups to 0.7.3: a focused application no longer
+appears twice in the running-apps view, and the OSD icon falls back to the window
+when the stream only advertises a placeholder or a shared Wine/Proton loader.
+
 ## Fixed
 
-- Auto mode no longer lists the application of the focused window twice. Active
-  already covers its streams, so that application stays in the Active card and
-  is left out of the running-applications list and of the cycle; the editor still
-  offers it as a chip. A selected application that becomes focused returns the
-  selection to Active.
-- The icon fallback follows the window when the stream has only a placeholder:
-  `audio-volume-*`, the generic audio/application icons and the shared Wine and
-  Proton loaders no longer win over the `.desktop` entry. A Proton game window
-  (`steam_app_<appid>`) reaches its `steam_icon_<appid>` even when the game is
-  not focused: the id is also read from `SteamAppId` in the environment of the
-  process that owns its stream. A user `.desktop` entry whose icon the theme
-  cannot render no longer hides a valid system entry.
-  Telegram's `org.telegram.desktop` identifier is looked up as the entry
-  `org.telegram.desktop.desktop`, not as `org.telegram`.
+### Auto mode
+
+- The application of the focused window is no longer listed twice. Active already
+  covers its streams, so that application stays in the Active card and is left
+  out of the running-applications list and of the cycle. One application now
+  appears once, and **Next profile** / **Previous profile** no longer contain an
+  Active step and an application step that do the same thing.
+- A selected application that becomes focused returns the selection to Active,
+  and `Overview()`, `Profiles()` and `appvol profile list` report that new
+  selection immediately instead of the stale target for one refresh.
+- The profile editor still receives every playing application through
+  `Applications()`, including the focused one, so it remains available as a chip.
+
+### Icons
+
+- Placeholder names no longer count as an application icon: `audio-volume-*`,
+  `audio-x-generic`, `application-x-executable` and the other generic audio and
+  application icons are skipped, and the window entry answers instead.
+- Shared Wine and Proton loaders (`wine-preloader`, `wine64-preloader`,
+  `wineserver`, `wine`) no longer win over the application icon.
+- A Proton game window (`steam_app_<appid>`) reaches its
+  `steam_icon_<appid>`: through the window class when the game is focused, and
+  through `SteamAppId` in the environment of the process that owns its stream
+  when it is not.
+- A user `.desktop` entry whose `Icon=` the theme cannot render no longer hides a
+  valid system entry with the same name.
+- An application id that itself ends in `.desktop` (Telegram is
+  `org.telegram.desktop`) is looked up as `org.telegram.desktop.desktop`, not as
+  `org.telegram`, so Telegram draws its own icon instead of the generic volume
+  one.
+
+### Theme lookup
+
 - The icon theme is read from `~/.config/kdedefaults/kdeglobals` when
   `~/.config/kdeglobals` has no `[Icons] Theme`, so the daemon uses the theme the
-  panel actually draws. Flatpak and Snap icon exports are searched even when the
-  daemon's `XDG_DATA_DIRS` does not list them.
+  panel actually draws instead of falling back to `breeze`.
+- Flatpak and Snap icon exports are searched even when the daemon's
+  `XDG_DATA_DIRS` does not list them.
 
 # appvol 0.7.3 (2026-11-03)
 
