@@ -161,12 +161,17 @@ step = 2
 playing: the daemon groups the live streams with
 [`appvol/apps.py`](../appvol/apps.py), in the order the applications appeared
 (the index of their first sink input), drops the shell and builds one target per
-application. The list is rebuilt on every read, so an application that starts
-joins the cycle and one that stops leaves it; a selection whose application is
-gone falls back to Active. An auto target carries the identifier variants the
-matcher compares, keeps the global step and ceiling, and its id is prefixed
-`app-`, so it can never be taken for the built-in profile or for one of the
-file. `profiles.toml` is not read in that mode, and a reload of it leaves the
+application. The application of the focused window is dropped as well: Active
+already covers its streams, so keeping an `app-*` target for it would put the
+same application in the window and in the cycle twice. `Applications()` still
+reports every playing application, because the editor offers the focused one as
+a chip. The list is rebuilt on every read, so an application that starts joins
+the cycle and one that stops leaves it; a selection whose application is gone,
+including one that just became focused, falls back to Active. An auto target
+carries the identifier variants the matcher compares, keeps the global step and
+ceiling, and its id is prefixed `app-`, so it can never be taken for the built-in
+profile or for one of the file profiles. `profiles.toml` is not read in that
+mode, and a reload of it leaves the
 selection alone. `Profiles()` (and so `appvol profile list`) reports the auto
 targets in that mode, and `appvol list` prints the id of the current target, so
 `app-spotify` is never mistaken for the file profile `spotify` that carries the

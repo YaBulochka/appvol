@@ -73,8 +73,9 @@ can render it; the matched stream, through the same chain as below, when the
 profile has an `include`; and the `.desktop` file of the target identifier,
 looked up by file name and by `StartupWMClass`. The target is the first `include`
 entry, or, for a profile that only excludes applications, the first `exclude`
-entry. When all of them come up empty the generic volume icon is used, so the
-caption is never left without an icon.
+entry. A `steam_app_<appid>` identifier also reaches the game icon the theme
+keeps as `steam_icon_<appid>`. When all of them come up empty the generic volume
+icon is used, so the caption is never left without an icon.
 
 ## Where the icon comes from
 
@@ -93,15 +94,32 @@ owning client are merged into the stream properties, as happens during matching:
 Spotify, for example, carries `application.process.binary=spotify` on the client
 only.
 
-When the stream advertises nothing that the theme knows, appvol falls back to the
-window icon: `Icon=` of `<desktopFileName>.desktop`, then
-`<resourceClass>.desktop`, then the identifier itself when it is not
-reverse-DNS. An identifier is also matched against the `StartupWMClass=` of the
-entries, because a window class rarely names its file: the Spotify window and its
-stream identify themselves as `spotify`, while the entry is
-`spotify-launcher.desktop` (which declares `StartupWMClass=spotify`). Applications
-that do not advertise themselves at all (Node and Electron players, launcher
-wrappers) end up with the same icon as the panel.
+Two kinds of value do not count as an application icon even when the theme can
+render them. The generic audio placeholders (`audio-volume-high` and the other
+`audio-volume-*` names, plus the generic audio and application icons such as
+`audio-x-generic` or `application-x-executable`) are what Plasma draws for an
+application that has no icon of its own. The Wine and Proton loaders
+(`wine-preloader`, `wine64-preloader`, `wineserver`, `wine`) are shared by every
+Windows game. appvol skips both and lets the window answer instead.
+
+When the stream advertises nothing usable, appvol falls back to the window icon:
+`Icon=` of `<desktopFileName>.desktop`, then `<resourceClass>.desktop`, then the
+identifier itself when it is not reverse-DNS. Every root is tried, so a user
+entry that names an icon the theme does not have cannot hide a system entry that
+names a valid one. An application id may itself end in `.desktop` (Telegram is
+`org.telegram.desktop`), so its entry is looked up as
+`org.telegram.desktop.desktop` as well. An identifier is also matched against the
+`StartupWMClass=` of the entries, because a window class rarely names its file:
+the Spotify window and its stream identify themselves as `spotify`, while the
+entry is `spotify-launcher.desktop` (which declares
+`StartupWMClass=spotify`). Applications that do not advertise themselves at all
+(Node and Electron players, launcher wrappers) end up with the same icon as the
+panel.
+
+A Proton game window is called `steam_app_<appid>` and Steam keeps its icon in
+the theme as `steam_icon_<appid>`. The stream only says `wine-preloader`, so the
+window class is the only link to the game icon; appvol resolves that before it
+settles on the generic Wine icon.
 
 Divergence from the panel is expected and is not a bug: when an application
 publishes an icon that differs from its window icon, the stream wins. Minecraft
@@ -116,13 +134,16 @@ startup), and `QIcon::fromTheme()` has behaviour worth copying: it drops the las
 segment after a dash, so `spotify-launcher` resolves to `spotify`. appvol
 therefore walks the theme itself
 ([`appvol/icon.py`](../appvol/icon.py)): the theme name is read from
-`kdeglobals` (`[Icons] Theme=`), then the theme, its `Inherits` chain and
-`hicolor` are searched, along with `XDG_*_DIRS/pixmaps`. A theme is the merge of
-its installs over the XDG roots, so a name added under `~/.local/share/icons` is
-found even when the theme itself lives in `/usr/share` and the user root carries
-no `index.theme` of its own — this is how the Steam game icons
-(`hicolor/<size>/apps/steam_icon_<appid>.png`) become visible to the daemon and to
-the window's icon picker. The name is also tried without the last dash segment.
+`~/.config/kdeglobals`, then from `~/.config/kdedefaults/kdeglobals` (Plasma 6
+keeps the distribution default there), then the theme, its `Inherits` chain and
+`hicolor` are searched, along with `XDG_*_DIRS/pixmaps`. Flatpak and Snap icon
+exports are searched even when the daemon's `XDG_DATA_DIRS` does not list them.
+A theme is the merge of its installs over the XDG roots, so a name added under
+`~/.local/share/icons` is found even when the theme itself lives in `/usr/share`
+and the user root carries no `index.theme` of its own — this is how the Steam
+game icons (`hicolor/<size>/apps/steam_icon_<appid>.png`) become visible to the
+daemon and to the window's icon picker. The name is also tried without the last
+dash segment.
 Results are cached for the lifetime of the daemon, so repeated key presses never
 touch the disk.
 

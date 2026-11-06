@@ -1,3 +1,24 @@
+# appvol 0.8.0 (2026-11-06)
+
+## Fixed
+
+- Auto mode no longer lists the application of the focused window twice. Active
+  already covers its streams, so that application stays in the Active card and
+  is left out of the running-applications list and of the cycle; the editor still
+  offers it as a chip. A selected application that becomes focused returns the
+  selection to Active.
+- The icon fallback follows the window when the stream has only a placeholder:
+  `audio-volume-*`, the generic audio/application icons and the shared Wine and
+  Proton loaders no longer win over the `.desktop` entry. A Proton game window
+  (`steam_app_<appid>`) reaches its `steam_icon_<appid>`, and a user `.desktop`
+  entry whose icon the theme cannot render no longer hides a valid system entry.
+  Telegram's `org.telegram.desktop` identifier is looked up as the entry
+  `org.telegram.desktop.desktop`, not as `org.telegram`.
+- The icon theme is read from `~/.config/kdedefaults/kdeglobals` when
+  `~/.config/kdeglobals` has no `[Icons] Theme`, so the daemon uses the theme the
+  panel actually draws. Flatpak and Snap icon exports are searched even when the
+  daemon's `XDG_DATA_DIRS` does not list them.
+
 # appvol 0.7.3 (2026-11-03)
 
 ## Fixed

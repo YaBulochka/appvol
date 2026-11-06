@@ -46,6 +46,12 @@ the section is **PROFILES**, with the number of profiles beside it; in the runni
 apps view it is **RUNNING APPLICATIONS**, and its caption says that the keys cycle
 through these.
 
+The focused application is the one exception: it is already in the Active card,
+so it is left out of the list. One application therefore appears once, and the
+cycle does not contain an Active step and an application step that do the same
+thing. When it is the only application playing, the list area says that the
+focused application is in Active; when nothing plays at all, it says so.
+
 A line of the list is one row: a radio button, the icon, the name with a caption,
 the volume slider, the percent, a mute button and a **⋮** menu.
 

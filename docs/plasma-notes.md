@@ -48,6 +48,14 @@ actually does.
 * Properties are sensitive to spelling: the pulse layer reports
   `application.icon_name`, PipeWire reports `application.icon-name`, so both
   spellings are read.
+* Plasma 6 stores the chosen icon theme in `~/.config/kdeglobals`, but a session
+  that follows the distribution default only has it in
+  `~/.config/kdedefaults/kdeglobals`. Reading both is what keeps the daemon on
+  the theme the panel draws.
+* A stream without an icon of its own advertises a generic `audio-volume-*` name
+  that the mixer draws as a placeholder. It is not the application icon, so it
+  must not stop the `.desktop` fallback; the same goes for the shared Wine
+  `wine-preloader`.
 * `QIcon::hasThemeIcon()` answers incorrectly outside a running session (the Qt
   theme comes from the platform theme, not from a `setThemeName` call after
   startup), and `QIcon::fromTheme()` has a behaviour worth copying: it drops the

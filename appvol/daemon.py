@@ -460,6 +460,12 @@ class Daemon(dbus.service.Object):
         the order the applications appeared, so one that stopped playing leaves
         the list and one that started joins its end.  ``streams`` lets a caller
         that already read a snapshot reuse it; ``None`` reads a fresh one.
+
+        The focused application is left out of the list: the built-in Active
+        profile already covers its streams, so listing it again would make one
+        application appear twice in the window and twice in the cycle.  The
+        ``Applications()`` reply still carries every stream, which is what the
+        editor needs to offer the focused application as a chip.
         """
         if self.config.mode != MODE_AUTO:
             return list(self.profiles)
@@ -469,11 +475,13 @@ class Daemon(dbus.service.Object):
                 # No connection: the list is unknown, so the selection stays as
                 # it is instead of dropping an application on a transient error.
                 return []
+        focused = set(self._match(active_profile(), streams).indices)
         targets = [
             application_profile(application)
             for application in in_appearance_order(
                 application for application in group_streams(streams) if not application.panel
             )
+            if not focused.intersection(application.indices)
         ]
         self._reconcile(targets)
         return targets
@@ -549,6 +557,9 @@ class Daemon(dbus.service.Object):
         (``app-spotify``) is not one of them.  The replies to a mutation keep the
         file profiles, which are the ones the mutation changed.
         """
+        # Reading the targets can move the selection back to Active, so it has
+        # to happen before ``current`` is reported.
+        listed = self._targets() if targets else self.profiles
         return {
             "ok": True,
             "current": self.state.selection.current,
@@ -560,10 +571,7 @@ class Daemon(dbus.service.Object):
                 "osd_show_name": self.config.osd_show_name,
                 "mode": self.config.mode,
             },
-            "profiles": [
-                profile.summary()
-                for profile in (self._targets() if targets else self.profiles)
-            ],
+            "profiles": [profile.summary() for profile in listed],
         }
 
     def _toggle_profile(self, profile_id: str, osd: bool = True) -> dict:
@@ -1251,10 +1259,13 @@ class Daemon(dbus.service.Object):
             streams = None
 
         by_index = {stream.index: stream for stream in streams} if streams else {}
-        current = self.state.selection.current
         auto = self.config.mode == MODE_AUTO
+        # Reading the targets can move the selection back to Active when the
+        # focused application left the auto list; report the selection after it.
+        targets = self._targets(streams)
+        current = self.state.selection.current
         entries = []
-        for profile in (active_profile(), *self._targets(streams)):
+        for profile in (active_profile(), *targets):
             entry = {
                 **profile.summary(),
                 "builtin": profile.id == ACTIVE_ID,

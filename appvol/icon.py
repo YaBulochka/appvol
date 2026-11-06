@@ -67,10 +67,44 @@ STREAM_ICON_KEYS = (
 )
 
 EXTRA_ICON_ROOTS = ("~/.icons",)
+EXTRA_ICON_DIRS = (
+    "flatpak/exports/share/icons",
+    "/var/lib/flatpak/exports/share/icons",
+    "/var/lib/snapd/desktop/icons",
+)
 EXTRA_APPLICATION_DIRS = (
     "flatpak/exports/share/applications",
     "/var/lib/flatpak/exports/share/applications",
     "/var/lib/snapd/desktop/applications",
+)
+
+# Names an audio stream advertises when it has no application icon of its own.
+# Plasma draws one of these as the mixer's placeholder, so taking it as "the
+# stream has an icon" would stop the fallback before the window entry is tried.
+PLACEHOLDER_ICON_NAMES = frozenset(
+    {
+        "application-x-executable",
+        "applications-multimedia",
+        "audio-card",
+        "audio-speakers",
+        "audio-x-generic",
+        "image-x-generic",
+        "multimedia-volume-control",
+        "video-x-generic",
+    }
+)
+PLACEHOLDER_ICON_PREFIXES = ("audio-volume-",)
+
+# Process names Wine and Proton use for every game.  The theme draws them, but
+# the icon says "Wine", not which game is running, so the window entry or the
+# Steam app id gets a chance first.
+GENERIC_STREAM_BINARIES = frozenset(
+    {
+        "wine",
+        "wine-preloader",
+        "wine64-preloader",
+        "wineserver",
+    }
 )
 
 
@@ -116,6 +150,8 @@ def application_dirs() -> tuple[Path, ...]:
 def icon_roots() -> tuple[Path, ...]:
     """Directories that hold icon themes, in lookup order."""
     candidates = [directory / "icons" for directory in (_data_home(), *_data_dirs())]
+    candidates.append(_data_home() / EXTRA_ICON_DIRS[0])
+    candidates += [Path(item) for item in EXTRA_ICON_DIRS[1:]]
     candidates += [Path(item).expanduser() for item in EXTRA_ICON_ROOTS]
     return _unique(candidates)
 
@@ -128,14 +164,24 @@ def pixmap_dirs() -> tuple[Path, ...]:
 
 @lru_cache(maxsize=1)
 def icon_theme() -> str:
-    """Icon theme of the session, as configured in ``kdeglobals``."""
-    try:
-        text = (_config_home() / "kdeglobals").read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return DEFAULT_THEME
-    for key, value in group_entries(text, KDE_GLOBALS_GROUP):
-        if key == "Theme" and value:
-            return value
+    """Icon theme of the session, as configured in ``kdeglobals``.
+
+    Plasma 6 keeps the choice the user made in ``~/.config/kdeglobals``, but a
+    session that still follows the distribution default only carries it in
+    ``~/.config/kdedefaults/kdeglobals``.  Reading only the first file left the
+    daemon on ``breeze`` while the panel drew another theme.
+    """
+    for path in (
+        _config_home() / "kdeglobals",
+        _config_home() / "kdedefaults" / "kdeglobals",
+    ):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for key, value in group_entries(text, KDE_GLOBALS_GROUP):
+            if key == "Theme" and value:
+                return value
     return DEFAULT_THEME
 
 
@@ -362,16 +408,55 @@ def theme_icon_names(
 # --------------------------------------------------------------------------- #
 
 
+def is_placeholder_icon(name: str) -> bool:
+    """True for the generic audio icon the mixer shows when an app has none."""
+    text = str(name or "").strip().lower()
+    return text in PLACEHOLDER_ICON_NAMES or text.startswith(PLACEHOLDER_ICON_PREFIXES)
+
+
+def is_generic_stream_binary(name: str) -> bool:
+    """True for a Wine/Proton loader that stands in for every Windows game."""
+    return str(name or "").strip().lower() in GENERIC_STREAM_BINARIES
+
+
+def steam_app_id(value: object) -> str:
+    """The app id of a ``steam_app_<id>`` window class, or ``""``.
+
+    Steam names a Proton game window ``steam_app_24240`` and keeps the icon in
+    the theme as ``steam_icon_24240``.  The stream itself only advertises
+    ``wine-preloader``, so the window class is the only link to the game icon.
+    """
+    stem = desktop_file_stem(value)
+    prefix = "steam_app_"
+    if not stem.startswith(prefix):
+        return ""
+    appid = stem[len(prefix) :]
+    return appid if appid.isdigit() else ""
+
+
 def stream_icon(
     props: Mapping[str, str] | None,
     theme: str | None = None,
     roots: Sequence[Path] | None = None,
     pixmaps: Sequence[Path] | None = None,
 ) -> str | None:
-    """Icon the KDE mixer shows for a stream, or ``None``."""
+    """Icon the KDE mixer shows for a stream, or ``None``.
+
+    A placeholder (``audio-volume-high`` and the other generic audio icons) and
+    a Wine/Proton loader do not identify an application: the lookup skips them
+    so the window entry can answer instead.
+    """
     for key in STREAM_ICON_KEYS:
         value = str((props or {}).get(key) or "").strip()
-        if value and resolvable(value, theme, roots, pixmaps):
+        if not value:
+            continue
+        if is_placeholder_icon(value):
+            log.debug("skipping the placeholder icon %r from %s", value, key)
+            continue
+        if is_generic_stream_binary(value):
+            log.debug("skipping the generic Wine binary %r from %s", value, key)
+            continue
+        if resolvable(value, theme, roots, pixmaps):
             log.debug("icon %r comes from the stream property %s", value, key)
             return value
     return None
@@ -389,7 +474,7 @@ def startup_wm_class_icons(dirs: tuple[Path, ...]) -> tuple[tuple[str, str], ...
     installing an application mid-session is the one case it misses.
     """
     found: list[tuple[str, str]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for directory in dirs:
         try:
             paths = sorted(directory.glob("*.desktop"))
@@ -401,43 +486,75 @@ def startup_wm_class_icons(dirs: tuple[Path, ...]) -> tuple[tuple[str, str], ...
             except OSError:
                 continue
             class_name = desktop_file_stem(startup_wm_class(text))
-            if not class_name or class_name in seen:
+            if not class_name:
                 continue
             icon = parse_icon(text)
-            if icon:
-                seen.add(class_name)
+            if icon and (class_name, icon) not in seen:
+                seen.add((class_name, icon))
                 found.append((class_name, icon))
     return tuple(found)
 
 
+def desktop_file_icons(stem: str, dirs: Sequence[Path] | None = None) -> tuple[str, ...]:
+    """Every ``Icon=`` the window entry offers, in lookup order.
+
+    Several roots can hold an entry with the same name.  The user's copy may
+    name an icon the current theme does not have while the system copy names a
+    valid one, so the caller needs all candidates, not only the first file.
+    """
+    raw = str(stem or "").strip().lower()
+    normalized = desktop_file_stem(raw)
+    if not normalized:
+        return ()
+    search_dirs = tuple(dirs) if dirs is not None else application_dirs()
+    found: list[str] = []
+
+    def add(icon: str | None) -> None:
+        if icon and icon not in found:
+            found.append(icon)
+
+    # An application id may itself end in ".desktop" (Telegram is
+    # ``org.telegram.desktop``), so the name without the suffix is not the only
+    # file to try: its entry is ``org.telegram.desktop.desktop``.  A window that
+    # reports a real file name (``firefox.desktop``) needs the stripped form.
+    filenames: list[str] = []
+    for name in (f"{raw}.desktop", f"{normalized}.desktop"):
+        if name not in filenames:
+            filenames.append(name)
+
+    for filename in filenames:
+        for directory in search_dirs:
+            path = directory / filename
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            icon = parse_icon(text)
+            if icon:
+                add(icon)
+            else:
+                log.debug("desktop file %s has no Icon= entry", path)
+
+    for class_name, icon in startup_wm_class_icons(search_dirs):
+        if class_name in (normalized, raw):
+            add(icon)
+    return tuple(found)
+
+
 def desktop_file_icon(stem: str, dirs: Sequence[Path] | None = None) -> str | None:
-    """``Icon=`` of the window's ``.desktop`` entry, or ``None`` when none matches.
+    """First ``Icon=`` of the window's ``.desktop`` entry, or ``None``.
 
     The entry is ``<stem>.desktop`` when it exists.  Otherwise the entries are
     searched for ``StartupWMClass=<stem>``, which is how a window class that is
     named after the application (``spotify``) finds the entry that is named after
-    its launcher (``spotify-launcher.desktop``).
+    its launcher (``spotify-launcher.desktop``).  :func:`resolve` uses
+    :func:`desktop_file_icons` so a candidate the theme cannot render does not
+    hide a later one.
     """
-    stem = desktop_file_stem(stem)
-    if not stem:
-        return None
-    search_dirs = tuple(dirs) if dirs is not None else application_dirs()
-    for directory in search_dirs:
-        path = directory / f"{stem}.desktop"
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        icon = parse_icon(text)
-        if icon:
-            return icon
-        log.debug("desktop file %s has no Icon= entry", path)
-
-    for class_name, icon in startup_wm_class_icons(search_dirs):
-        if class_name == stem:
-            log.debug("icon %r comes from the StartupWMClass of %r", icon, stem)
-            return icon
-    return None
+    icons = desktop_file_icons(stem, dirs)
+    if icons:
+        log.debug("icon %r comes from the window entry of %r", icons[0], stem)
+    return icons[0] if icons else None
 
 
 def resolve(
@@ -454,11 +571,29 @@ def resolve(
     if icon:
         return icon
 
-    stems = [desktop_file_stem(desktop_file_name), desktop_file_stem(resource_class)]
+    raw_stems = [
+        str(desktop_file_name or "").strip().lower(),
+        str(resource_class or "").strip().lower(),
+    ]
+    raw_stems = [
+        stem for index, stem in enumerate(raw_stems) if stem and stem not in raw_stems[:index]
+    ]
+    stems = [desktop_file_stem(stem) for stem in raw_stems]
+
+    # A Proton game is the one case where the window is more specific than the
+    # stream: the stream only says "wine-preloader", while the window class
+    # names the Steam app whose icon lives in the theme as steam_icon_<appid>.
     for stem in stems:
-        icon = desktop_file_icon(stem, dirs)
-        if icon and resolvable(icon, theme, roots, pixmaps):
-            return icon
+        appid = steam_app_id(stem)
+        candidate = f"steam_icon_{appid}" if appid else ""
+        if candidate and resolvable(candidate, theme, roots, pixmaps):
+            log.debug("icon %r comes from the Steam app id of %r", candidate, stem)
+            return candidate
+
+    for stem in raw_stems:
+        for candidate in desktop_file_icons(stem, dirs):
+            if resolvable(candidate, theme, roots, pixmaps):
+                return candidate
 
     for stem in stems:
         if stem and "." not in stem and resolvable(stem, theme, roots, pixmaps):

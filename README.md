@@ -113,12 +113,14 @@ minutes without a key press return the keys to the Active profile.
 The keys can instead follow the session. `appvol mode auto` — or the switch in
 the window — replaces the profiles with the applications that are playing:
 **Next profile** and **Previous profile** then walk Active and every application,
-in the order the applications started. An application that stops playing leaves
+in the order the applications started. The application of the focused window is
+covered by Active and is not listed again, so one application never appears
+twice in the window or in the cycle. An application that stops playing leaves
 the cycle, and one that starts joins its end. `appvol mode profiles` goes back,
 and `appvol mode` alone reports the current one.
 
 <p align="center">
-  <img src="docs/images/auto.png" alt="The appvol window in the running apps view: one line per application that is playing, with its icon, its streams and its live volume" width="640">
+  <img src="docs/images/auto.png" alt="The appvol window in the running apps view: the focused application in the Active card and one line per other playing application, with its icon, its streams and its live volume" width="640">
 </p>
 
 The step and the ceiling stay global in the auto mode, and `profiles.toml` is
@@ -130,8 +132,9 @@ left untouched, so the two modes never overwrite each other.
 profiles: the built-in **Active window** pinned at the top, then one line per
 profile with its live volume, the streams it matches, the key bound to it, its
 mute button and a **⋮** menu. A segmented control switches between **Profiles**
-and **Running apps**. Closing the window quits the GUI; the daemon and the
-hotkeys keep running.
+and **Running apps**; in the second view the focused application stays in the
+Active card and the list holds the other applications that are playing. Closing
+the window quits the GUI; the daemon and the hotkeys keep running.
 
 - The sliders and the mute buttons act on the live streams.
 - The **⋮** menu of a row holds **Bind Keys…**, **Step…**, **Edit…** and

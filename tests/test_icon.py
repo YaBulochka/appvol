@@ -82,7 +82,14 @@ Context=Applications
 """
 
 # Icons the fake themes provide (relative paths inside a theme).
-MAIN_THEME_ICONS = ("apps/48/spotify.svg", "apps/48/utilities-terminal.svg", "apps/16/small.png")
+MAIN_THEME_ICONS = (
+    "apps/48/spotify.svg",
+    "apps/48/utilities-terminal.svg",
+    "apps/48/audio-volume-high.svg",
+    "apps/48/wine-preloader.svg",
+    "apps/48/steam_icon_24240.svg",
+    "apps/16/small.png",
+)
 HICOLOR_ICONS = ("apps/16/spotify-launcher.png",)
 
 
@@ -256,6 +263,19 @@ class StreamIconTests(IconTestCase):
         self.assertIsNone(self.stream_icon({}))
         self.assertIsNone(self.stream_icon({"application.name": "Minecraft", "node.name": "Minecraft"}))
 
+    def test_a_placeholder_is_skipped_for_the_next_property(self) -> None:
+        props = {
+            "application.icon_name": "audio-volume-high",
+            "application.process.binary": "spotify",
+        }
+        self.assertEqual(self.stream_icon(props), "spotify")
+
+    def test_a_stream_with_only_a_placeholder_has_no_icon(self) -> None:
+        self.assertIsNone(self.stream_icon({"application.icon_name": "audio-volume-high"}))
+
+    def test_a_wine_loader_is_not_taken_for_the_application(self) -> None:
+        self.assertIsNone(self.stream_icon({"application.process.binary": "wine-preloader"}))
+
 
 class ResolveTests(IconTestCase):
     def test_stream_icon_wins_over_the_desktop_file(self) -> None:
@@ -312,6 +332,92 @@ class ResolveTests(IconTestCase):
 
     def test_nothing_known(self) -> None:
         self.assertIsNone(self.resolve())
+
+    def test_a_placeholder_falls_back_to_the_window_entry(self) -> None:
+        self._touch(self.applications / "org.kde.konsole.desktop").write_text(
+            DESKTOP_KONSOLE, encoding="utf-8"
+        )
+        result = self.resolve(
+            desktop_file_name="org.kde.konsole",
+            props={"application.icon_name": "audio-volume-high"},
+        )
+        self.assertEqual(result, "utilities-terminal")
+
+    def test_an_entry_with_an_unrenderable_icon_does_not_hide_the_next_root(self) -> None:
+        # Telegram's user entry can name ``telegram-desktop`` while the theme
+        # only ships the system entry's ``org.telegram.desktop``.
+        other = self.tmp / "system-applications"
+        other.mkdir()
+        self._touch(self.applications / "org.telegram.desktop.desktop").write_text(
+            "[Desktop Entry]\nIcon=not-in-this-theme\n", encoding="utf-8"
+        )
+        self._touch(other / "org.telegram.desktop.desktop").write_text(
+            "[Desktop Entry]\nIcon=spotify\n", encoding="utf-8"
+        )
+
+        result = icon.resolve(
+            desktop_file_name="org.telegram.desktop",
+            dirs=[self.applications, other],
+            theme="testtheme",
+            roots=[self.icons],
+            pixmaps=[self.pixmaps],
+        )
+
+        self.assertEqual(result, "spotify")
+
+    def test_a_proton_window_gets_the_steam_game_icon(self) -> None:
+        result = self.resolve(
+            resource_class="steam_app_24240",
+            props={
+                "application.name": "Engine",
+                "application.process.binary": "wine-preloader",
+            },
+        )
+        self.assertEqual(result, "steam_icon_24240")
+
+    def test_the_steam_mapping_needs_numeric_app_id(self) -> None:
+        self.assertEqual(icon.steam_app_id("steam_app_24240"), "24240")
+        self.assertEqual(icon.steam_app_id("steam_app_"), "")
+        self.assertEqual(icon.steam_app_id("steam_app_payday"), "")
+        self.assertEqual(icon.steam_app_id("spotify"), "")
+
+
+class ThemeConfigurationTests(IconTestCase):
+    """Plasma 6 can keep the icon theme in kdedefaults instead of kdeglobals."""
+
+    def test_the_user_configuration_wins(self) -> None:
+        config = self.tmp / "config"
+        (config / "kdedefaults").mkdir(parents=True)
+        (config / "kdeglobals").write_text("[Icons]\nTheme=user-theme\n", encoding="utf-8")
+        (config / "kdedefaults" / "kdeglobals").write_text(
+            "[Icons]\nTheme=default-theme\n", encoding="utf-8"
+        )
+        with mock.patch.dict("os.environ", {"XDG_CONFIG_HOME": str(config)}):
+            icon.icon_theme.cache_clear()
+            self.assertEqual(icon.icon_theme(), "user-theme")
+
+    def test_the_distribution_default_is_read_from_kdedefaults(self) -> None:
+        config = self.tmp / "config"
+        (config / "kdedefaults").mkdir(parents=True)
+        (config / "kdedefaults" / "kdeglobals").write_text(
+            "[Icons]\nTheme=default-theme\n", encoding="utf-8"
+        )
+        with mock.patch.dict("os.environ", {"XDG_CONFIG_HOME": str(config)}):
+            icon.icon_theme.cache_clear()
+            self.assertEqual(icon.icon_theme(), "default-theme")
+
+    def test_flatpak_and_snap_icon_roots_are_always_searched(self) -> None:
+        home = self.tmp / "home"
+        with mock.patch.dict(
+            "os.environ",
+            {"XDG_DATA_HOME": str(home), "XDG_DATA_DIRS": "/usr/share"},
+        ):
+            icon.icon_roots.cache_clear()
+            roots = icon.icon_roots()
+
+        self.assertIn(home / "flatpak/exports/share/icons", roots)
+        self.assertIn(Path("/var/lib/flatpak/exports/share/icons"), roots)
+        self.assertIn(Path("/var/lib/snapd/desktop/icons"), roots)
 
 
 class ThemeListingTests(IconTestCase):

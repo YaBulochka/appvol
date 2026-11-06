@@ -37,6 +37,10 @@ Kirigami.ApplicationWindow {
     // view.  The daemon reports Active as a profile too, so it is filtered out.
     readonly property var listedProfiles: bridge.profiles.filter(profile => !profile.builtin)
     readonly property bool autoMode: bridge.mode === "auto"
+    // In the running-apps view the focused application lives in the Active card
+    // and is left out of the list, so "no rows" does not mean "nothing plays".
+    readonly property bool activeHasStreams: !!activeProfile
+        && activeProfile.matched > 0
     // The window's accent; a Breeze Button switches to its own color set, so the
     // header passes this one down to the controls that must keep it.
     readonly property color accentColor: Kirigami.Theme.highlightColor
@@ -320,10 +324,20 @@ Kirigami.ApplicationWindow {
                     anchors.centerIn: parent
                     width: parent.width - Kirigami.Units.gridUnit * 4
                     visible: bridge.daemonRunning && root.autoMode
-                        && root.listedProfiles.length === 0
+                        && root.listedProfiles.length === 0 && !root.activeHasStreams
                     icon.name: "audio-volume-high"
                     text: "Nothing is playing"
                     explanation: "Every application that plays joins this list, and the volume keys cycle Active and the applications, in the order they started."
+                }
+
+                Kirigami.PlaceholderMessage {
+                    anchors.centerIn: parent
+                    width: parent.width - Kirigami.Units.gridUnit * 4
+                    visible: bridge.daemonRunning && root.autoMode
+                        && root.listedProfiles.length === 0 && root.activeHasStreams
+                    icon.name: "window"
+                    text: "The focused application is in Active"
+                    explanation: "Every other application that starts playing joins this list."
                 }
 
                 Kirigami.PlaceholderMessage {

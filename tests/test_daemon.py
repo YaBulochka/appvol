@@ -622,6 +622,140 @@ class AutoModeTest(unittest.TestCase):
 
         self.assertEqual([item.id for item in app._targets()], ["app-spotify"])
 
+    def test_the_focused_application_is_not_listed_twice(self) -> None:
+        spotify = Stream(
+            index=1,
+            props={
+                "application.process.id": "111",
+                "application.name": "Spotify",
+                "application.process.binary": "spotify",
+            },
+            volume=(0.5,),
+        )
+        firefox = Stream(
+            index=2,
+            props={
+                "application.process.id": "222",
+                "application.name": "Firefox",
+                "application.process.binary": "firefox",
+            },
+            volume=(0.5,),
+        )
+        app = self.make([spotify, firefox])
+        app.state.update_focus(
+            Focus(pid=111, resource_class="spotify", desktop_file_name="spotify")
+        )
+
+        self.assertEqual([item.id for item in app._targets()], ["app-firefox"])
+        overview = app._overview()
+        self.assertEqual(
+            [entry["id"] for entry in overview["profiles"]], ["active", "app-firefox"]
+        )
+        self.assertEqual(overview["profiles"][0]["matched"], 1)
+        # The editor still needs the focused application as a chip.
+        self.assertEqual(
+            [entry["id"] for entry in app._applications()["applications"]],
+            ["firefox", "spotify"],
+        )
+
+    def test_a_focused_application_is_removed_by_the_name_step(self) -> None:
+        # The stream pid differs from the window pid, so only the name step
+        # links the window to the application; the whole group still goes.
+        spotify = Stream(
+            index=1,
+            props={
+                "application.process.id": "999",
+                "application.name": "Spotify",
+                "application.process.binary": "spotify",
+            },
+            volume=(0.5,),
+        )
+        firefox = Stream(
+            index=2,
+            props={"application.name": "Firefox", "application.process.binary": "firefox"},
+            volume=(0.5,),
+        )
+        app = self.make([spotify, firefox])
+        app.state.update_focus(
+            Focus(pid=111, resource_class="Spotify", desktop_file_name="spotify")
+        )
+
+        self.assertEqual([item.id for item in app._targets()], ["app-firefox"])
+
+    def test_a_window_without_a_stream_leaves_every_application_listed(self) -> None:
+        app = self.make([SPOTIFY_STREAM, FIREFOX_STREAM])
+        app.state.update_focus(
+            Focus(pid=999, resource_class="konsole", desktop_file_name="org.kde.konsole")
+        )
+
+        self.assertEqual([item.id for item in app._targets()], ["app-spotify", "app-firefox"])
+
+    def test_a_selected_application_that_becomes_focused_falls_back_to_active(self) -> None:
+        spotify = Stream(
+            index=1,
+            props={"application.process.id": "111", "application.name": "Spotify"},
+            volume=(0.5,),
+        )
+        app = self.make([spotify])
+        app.state.selection.select("app-spotify", 0.0)
+        app.state.update_focus(
+            Focus(pid=111, resource_class="spotify", desktop_file_name="spotify")
+        )
+
+        self.assertEqual(app.current_profile().id, "active")
+        self.assertEqual(app.state.selection.current, "active")
+
+    def test_the_overview_reports_active_after_the_selected_app_becomes_focused(self) -> None:
+        spotify = Stream(
+            index=1,
+            props={"application.process.id": "111", "application.name": "Spotify"},
+            volume=(0.5,),
+        )
+        app = self.make([spotify])
+        app.state.selection.select("app-spotify", 0.0)
+        app.state.update_focus(
+            Focus(pid=111, resource_class="spotify", desktop_file_name="spotify")
+        )
+
+        overview = app._overview()
+
+        self.assertEqual(overview["current"], "active")
+        self.assertTrue(overview["profiles"][0]["current"])
+
+    def test_the_cycle_does_not_repeat_the_focused_application(self) -> None:
+        spotify = Stream(
+            index=1,
+            props={"application.process.id": "111", "application.name": "Spotify"},
+            volume=(0.5,),
+        )
+        firefox = Stream(
+            index=2,
+            props={"application.process.id": "222", "application.name": "Firefox"},
+            volume=(0.5,),
+        )
+        app = self.make([spotify, firefox])
+        app.state.update_focus(
+            Focus(pid=111, resource_class="spotify", desktop_file_name="spotify")
+        )
+        app._feedback = mock.Mock()
+
+        visited = []
+        for _ in range(4):
+            app._cycle_profile(1)
+            visited.append(app.state.selection.current)
+
+        self.assertEqual(visited, ["app-firefox", "active", "app-firefox", "active"])
+
+    def test_the_profiles_mode_still_lists_every_file_profile(self) -> None:
+        app = self.make(
+            [SPOTIFY_STREAM], profiles=[Profile(id="spotify")], config=Config()
+        )
+        app.state.update_focus(
+            Focus(pid=111, resource_class="spotify", desktop_file_name="spotify")
+        )
+
+        self.assertEqual([item.id for item in app._targets()], ["spotify"])
+
     def test_an_application_that_stopped_leaves_the_list(self) -> None:
         app = self.make([SPOTIFY_STREAM, FIREFOX_STREAM])
         app.pulse = RecordingPulse([FIREFOX_STREAM])
@@ -777,6 +911,23 @@ class AutoModeTest(unittest.TestCase):
 
         self.assertEqual(payload["current"], "app-spotify")
         self.assertEqual([entry["id"] for entry in payload["profiles"]], ["app-spotify"])
+
+    def test_the_profiles_report_reports_active_after_the_selected_app_is_focused(self) -> None:
+        spotify = Stream(
+            index=1,
+            props={"application.process.id": "111", "application.name": "Spotify"},
+            volume=(0.5,),
+        )
+        app = self.make([spotify], profiles=[Profile(id="spotify")])
+        app.state.selection.select("app-spotify", 0.0)
+        app.state.update_focus(
+            Focus(pid=111, resource_class="spotify", desktop_file_name="spotify")
+        )
+
+        payload = app._profiles(targets=True)
+
+        self.assertEqual(payload["current"], "active")
+        self.assertEqual(payload["profiles"], [])
 
     def test_a_mutation_reply_keeps_the_file_profiles_in_the_auto_mode(self) -> None:
         # The reply to a write lists what the write changed, not the live cycle.
