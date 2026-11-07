@@ -264,7 +264,8 @@ class CycleProfileTest(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         app = StepDaemon(Path(tmp.name), profiles)
-        # The step files are never written here, only the selection moves.
+        # The empty snapshot leaves Active with no stream, so the cycle skips it.
+        app.pulse = FakePulse()
         app._feedback = mock.Mock()
         return app
 
@@ -276,7 +277,7 @@ class CycleProfileTest(unittest.TestCase):
             app._cycle_profile(1)
             visited.append(app.state.selection.current)
 
-        self.assertEqual(visited, ["spotify", "cs2", "active", "spotify"])
+        self.assertEqual(visited, ["spotify", "cs2", "spotify", "cs2"])
 
     def test_previous_goes_backwards(self) -> None:
         app = self.make([Profile(id="spotify"), Profile(id="cs2")])
@@ -1035,7 +1036,7 @@ class AutoModeTest(unittest.TestCase):
             app._cycle_profile(1)
             visited.append(app.state.selection.current)
 
-        self.assertEqual(visited, ["app-spotify", "app-firefox", "active", "app-spotify"])
+        self.assertEqual(visited, ["app-spotify", "app-firefox", "app-spotify", "app-firefox"])
 
     def test_landing_on_active_resolves_the_current_focus(self) -> None:
         # The Active step must describe the focused window now, not the last
@@ -1066,7 +1067,7 @@ class AutoModeTest(unittest.TestCase):
             app._cycle_profile(1)
 
         self.assertNotIn("wine-preloader", str(app.osd.calls[before:]))
-        self.assertEqual(app.osd.calls[-1], ("text", daemon.PROFILE_FALLBACK_ICON, "No stream"))
+        self.assertEqual(len(app.osd.calls), before)
 
     def test_landing_on_active_shows_the_focused_stream(self) -> None:
         spotify = Stream(
@@ -1093,9 +1094,7 @@ class AutoModeTest(unittest.TestCase):
 
         self.assertEqual(app.osd.calls[-1], ("volume", 70, "firefox", "", 100))
 
-    def test_landing_on_active_without_a_stream_still_answers(self) -> None:
-        # Silence would leave the previous OSD on screen, which is exactly how
-        # the application that just left the cycle seemed to stay there.
+    def test_a_cycle_skips_active_without_a_stream(self) -> None:
         app = self.make([SPOTIFY_STREAM])
         app.osd = RecordingOsd()
         app.state.update_focus(
@@ -1106,7 +1105,8 @@ class AutoModeTest(unittest.TestCase):
         with mock.patch.object(daemon, "resolve_icon", return_value="konsole"):
             app._cycle_profile(-1)
 
-        self.assertEqual(app.osd.calls[-1], ("text", "konsole", "No stream"))
+        self.assertEqual(app.state.selection.current, "app-spotify")
+        self.assertEqual(app.osd.calls[-1], ("volume", 50, "konsole", "", 100))
 
     def test_an_application_target_is_resolvable(self) -> None:
         app = self.make([SPOTIFY_STREAM])

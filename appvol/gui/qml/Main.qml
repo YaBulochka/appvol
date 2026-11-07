@@ -48,7 +48,7 @@ Kirigami.ApplicationWindow {
 
     readonly property string footerSummary: {
         if (autoMode) {
-            return "Keys cycle Active and the running applications"
+            return "Keys cycle the running applications, plus Active while it has a stream"
         }
         if (bridge.idleTimeout > 0) {
             return "Idle profiles return to Active after " + Math.round(bridge.idleTimeout / 60) + " min"
@@ -57,7 +57,7 @@ Kirigami.ApplicationWindow {
     }
     readonly property string footerHint: {
         if (autoMode) {
-            return "The volume keys cycle Active and every application that is playing, in the order the applications started."
+            return "The volume keys cycle every application that is playing, in the order the applications started, plus Active while the focused window has a stream."
                 + " A per-profile key does nothing here; switch back to the profiles to use one."
         }
         const idle = bridge.idleTimeout > 0
@@ -229,7 +229,7 @@ Kirigami.ApplicationWindow {
                     display: Controls.AbstractButton.TextOnly
                     implicitWidth: Kirigami.Units.gridUnit * 1.2
                     Controls.ToolTip.visible: hovered
-                    Controls.ToolTip.text: "The volume keys cycle Active and every application that is playing, in the order the applications started."
+                    Controls.ToolTip.text: "The volume keys cycle every application that is playing, in the order the applications started, plus Active while the focused window has a stream."
                 }
             }
 

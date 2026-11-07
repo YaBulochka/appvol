@@ -598,13 +598,24 @@ class Daemon(dbus.service.Object):
         then the profiles of ``profiles.toml``, or the applications that are
         playing in the auto mode.  Unlike a profile key this is a plain switch, so
         a second press goes on instead of coming back.
+
+        Active is skipped while it matches no stream: on the desktop it would
+        otherwise land on a target that can only answer ``No stream``.
         """
         order = [ACTIVE_ID, *(profile.id for profile in self._targets())]
         try:
             index = order.index(self.state.selection.current)
         except ValueError:
             index = 0
-        target = order[(index + step) % len(order)]
+        target = ""
+        for offset in range(1, len(order) + 1):
+            candidate = order[(index + step * offset) % len(order)]
+            if candidate != ACTIVE_ID or self._active_has_streams():
+                target = candidate
+                break
+        if not target:
+            log.info("nothing to switch to: the Active profile matches no stream")
+            return
         self.state.selection.select(target, time.monotonic())
         profile = self.current_profile()
         log.info("profile: %s", self.state.selection.current)
@@ -614,6 +625,15 @@ class Daemon(dbus.service.Object):
         # Its name stays out of the caption, because Active covers every stream
         # of the focused window.
         self._feedback(profile, osd=True, name_in_caption=profile.id != ACTIVE_ID)
+
+    def _active_has_streams(self) -> bool:
+        """Whether the built-in Active profile currently matches a stream."""
+        try:
+            _streams, result = self._resolve(active_profile())
+        except RuntimeError as exc:
+            log.warning("cannot read the streams for the Active profile: %s", exc)
+            return False
+        return result.matched
 
     def _switch_target(self, profile_id: str) -> Profile:
         """The profile a switch refers to; an empty id means the built-in one."""

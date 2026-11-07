@@ -82,8 +82,9 @@ throwaway config: `appvold -v --config /tmp/appvol.toml` with
 it happens between ten and twenty seconds after the last press, and the log says
 `profile <id> idle for 10s, back to active`.
 
-`appvol mode auto` is the other list: the keys then cycle Active and the
-applications that are playing, and the log says `mode: auto` on the switch. Start
+`appvol mode auto` is the other list: the keys then cycle Active, while it has a
+stream, and the applications that are playing, and the log says `mode: auto` on
+the switch. Start
 and stop a player while it is on to see an application join the end of the cycle
 and leave it again; `appvol mode profiles` goes back.
 

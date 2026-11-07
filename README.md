@@ -105,15 +105,18 @@ application name when **OSD App Name** is switched on in the **⋮** menu of the
 window.
 
 **Next profile** and **Previous profile** walk through the built-in Active profile
-and your profiles in the order the window lists them, wrapping around. Five
-minutes without a key press return the keys to the Active profile.
+and your profiles in the order the window lists them, wrapping around. The
+Active step is skipped while it matches no stream, so the keys do not stop on a
+target that would only answer `No stream`. Five minutes without a key press
+return the keys to the Active profile.
 
 ### Auto mode
 
 The keys can instead follow the session. `appvol mode auto` — or the switch in
 the window — replaces the profiles with the applications that are playing:
-**Next profile** and **Previous profile** then walk Active and every application,
-in the order the applications started. The application of the focused window is
+**Next profile** and **Previous profile** then walk Active, while it matches a
+stream, and every application that is playing, in the order the applications
+started. The application of the focused window is
 covered by Active and is not listed again, so one application never appears
 twice in the window or in the cycle. An application that stops playing leaves
 the cycle, and one that starts joins its end. `appvol mode profiles` goes back,
