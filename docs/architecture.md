@@ -59,7 +59,7 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `Applications()` | ` -> s` | window editor | JSON: the applications playing now |
 | `AddProfile(id, name, include, exclude, step, max_volume, icon)` | `ssasasdds -> s` | client, window | JSON: the profiles after the change |
 | `RemoveProfile(id)` | `s -> s` | client, window | JSON: the profiles after the change |
-| `Reload()` | ` -> s` | client | read `profiles.toml` again |
+| `Reload()` | ` -> s` | client | read `profiles.toml` and `config.toml` again |
 | `List()` | ` -> s` | client | JSON: config, profile, focus, match, streams, OSD appearance |
 
 An empty profile argument means the current profile, except in `ToggleProfile`
@@ -145,7 +145,7 @@ the daemon returns to Active and logs the return.
 The profiles live in `~/.config/appvol/profiles.toml`, which the daemon reads at
 start and writes on every change, replacing the file in one step. The CLI and the
 window both go through the D-Bus API, so there is a single writer; `Reload()`
-exists for hand edits.
+exists for hand edits of either file.
 
 ```toml
 [[profile]]

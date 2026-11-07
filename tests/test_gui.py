@@ -103,9 +103,10 @@ APPLICATIONS = {
 class FakeProxy:
     """Stand-in for a dbus proxy: records the calls, replays canned answers."""
 
-    def __init__(self, answers=None, raises=None) -> None:
+    def __init__(self, answers=None, raises=None, errors=None) -> None:
         self.__dict__["answers"] = dict(answers or {})
         self.__dict__["raises"] = raises
+        self.__dict__["errors"] = dict(errors or {})
         self.__dict__["calls"] = []
 
     def __getattr__(self, name):
@@ -113,6 +114,9 @@ class FakeProxy:
             self.calls.append((name, args))
             if self.raises is not None:
                 raise self.raises
+            error = self.errors.get(name)
+            if error is not None:
+                raise error
             return json.dumps(self.answers.get(name, {"ok": True}))
 
         return call
@@ -132,6 +136,10 @@ class FakeKeys:
 
 def missing_service() -> dbus.DBusException:
     return dbus.DBusException("not found", name="org.freedesktop.DBus.Error.ServiceUnknown")
+
+
+def failed_overview() -> dbus.DBusException:
+    return dbus.DBusException("overview failed", name="org.freedesktop.DBus.Error.Failed")
 
 
 class ConstantsTests(unittest.TestCase):
@@ -282,8 +290,12 @@ class ShortcutKeyTests(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_QT, "PySide6 is not installed")
 class BridgeTests(unittest.TestCase):
-    def make(self, answers=None, raises=None, keys=None):
-        proxy = FakeProxy(answers or {"Overview": OVERVIEW, "Applications": APPLICATIONS}, raises)
+    def make(self, answers=None, raises=None, keys=None, errors=None):
+        proxy = FakeProxy(
+            answers or {"Overview": OVERVIEW, "Applications": APPLICATIONS},
+            raises,
+            errors,
+        )
         self.proxy = proxy
         self.keys = keys or FakeKeys({action_name("spotify"): "Ctrl+Alt+1"})
         bridge = Bridge(Client(connect=lambda: proxy), self.keys)
@@ -314,6 +326,37 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(bridge.error, NOT_RUNNING)
         self.assertFalse(bridge.daemonRunning)
         self.assertEqual(bridge.profiles, [])
+
+    def test_a_failed_overview_is_not_cleared_by_applications(self) -> None:
+        bridge = self.make(errors={"Overview": failed_overview()})
+
+        bridge.refresh()
+
+        self.assertIn("overview failed", bridge.error)
+        self.assertTrue(bridge.daemonRunning)
+        self.assertEqual(bridge.applications[0]["label"], "Spotify")
+
+    def test_a_failed_overview_keeps_the_previous_panel(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        previous = bridge.profiles
+
+        self.proxy.__dict__["errors"] = {"Overview": failed_overview()}
+        bridge.refresh()
+
+        self.assertEqual(bridge.profiles, previous)
+        self.assertIn("overview failed", bridge.error)
+
+    def test_a_later_successful_refresh_clears_the_error(self) -> None:
+        bridge = self.make(errors={"Overview": failed_overview()})
+        bridge.refresh()
+        self.assertIn("overview failed", bridge.error)
+
+        self.proxy.__dict__["errors"] = {}
+        bridge.refresh()
+
+        self.assertEqual(bridge.error, "")
+        self.assertTrue(bridge.daemonRunning)
 
     def test_selecting_a_profile_writes_and_reloads(self) -> None:
         bridge = self.make()

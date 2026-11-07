@@ -7,6 +7,7 @@ what the step of a row writes.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -508,6 +509,122 @@ class SetStepTest(unittest.TestCase):
         with self.assertRaises(dbus.DBusException):
             daemon._step(-1.0)
         self.assertEqual(daemon._step(0.0), 0.0)
+
+
+class ConfigReloadTest(unittest.TestCase):
+    """A hand edit to config.toml survives the next write from the window."""
+
+    def make(self, tmp: str) -> StepDaemon:
+        app = StepDaemon(Path(tmp), [Profile(id="spotify")])
+        app.osd = mock.Mock()
+        app.shortcuts = mock.Mock()
+        return app
+
+    def test_a_step_change_keeps_the_hand_edited_ceiling(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+            app.config_path.write_text(
+                "step = 5\nmax_volume = 130\nosd = false\nprofile_idle_timeout = 60\n",
+                encoding="utf-8",
+            )
+
+            app._set_step("active", 3.0)
+
+            stored = daemon.load_config(app.config_path)
+            self.assertEqual(
+                (stored.step, stored.max_volume, stored.osd, stored.profile_idle_timeout),
+                (3.0, 130.0, False, 60.0),
+            )
+            self.assertFalse(app.osd.enabled)
+
+    def test_a_mode_change_keeps_the_hand_edited_ceiling(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+            app.config_path.write_text("max_volume = 130\n", encoding="utf-8")
+
+            app._set_mode("auto")
+
+            self.assertEqual(app.config.mode, "auto")
+            self.assertEqual(daemon.load_config(app.config_path).max_volume, 130.0)
+
+    def test_the_osd_checkbox_keeps_the_hand_edited_ceiling(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+            app.config_path.write_text("max_volume = 130\n", encoding="utf-8")
+
+            app._set_osd_show_name(True)
+
+            stored = daemon.load_config(app.config_path)
+            self.assertEqual((stored.max_volume, stored.osd_show_name), (130.0, True))
+
+    def test_reload_adopts_a_hand_edit_immediately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+            app.config_path.write_text("max_volume = 130\n", encoding="utf-8")
+
+            payload = json.loads(app.Reload())
+
+            self.assertEqual(app.config.max_volume, 130.0)
+            self.assertEqual(payload["config"]["max_volume"], 130.0)
+
+
+class AddProfileValidationTest(unittest.TestCase):
+    """The D-Bus API cannot write a value the daemon's parsers would reject."""
+
+    def make(self, tmp: str) -> StepDaemon:
+        app = StepDaemon(Path(tmp))
+        app.shortcuts = mock.Mock()
+        return app
+
+    def test_a_negative_step_is_refused_before_any_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+
+            with self.assertRaises(dbus.DBusException) as caught:
+                app._add_profile("x", "X", ["app"], [], -5.0, 0.0, "")
+
+            self.assertEqual(caught.exception.get_dbus_name(), "org.appvol.Error.InvalidArgument")
+            self.assertFalse(app.profiles_path.exists())
+
+    def test_a_negative_ceiling_is_refused_before_any_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+
+            with self.assertRaises(dbus.DBusException) as caught:
+                app._add_profile("x", "X", ["app"], [], 0.0, -10.0, "")
+
+            self.assertEqual(caught.exception.get_dbus_name(), "org.appvol.Error.InvalidArgument")
+            self.assertFalse(app.profiles_path.exists())
+
+    def test_a_non_finite_amount_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+
+            for step, ceiling in ((float("nan"), 0.0), (float("inf"), 0.0), (0.0, float("inf"))):
+                with self.subTest(step=step, ceiling=ceiling):
+                    with self.assertRaises(dbus.DBusException):
+                        app._add_profile("x", "X", ["app"], [], step, ceiling, "")
+
+            self.assertFalse(app.profiles_path.exists())
+
+    def test_a_ceiling_above_the_hard_limit_is_clamped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+
+            app._add_profile("x", "X", ["app"], [], 0.0, 200.0, "")
+
+            self.assertEqual(app.profiles[0].max_volume, 150.0)
+            stored = parse_profiles(app.profiles_path.read_text(encoding="utf-8"))
+            self.assertEqual(stored[0].max_volume, 150.0)
+
+    def test_zero_means_the_global_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp)
+
+            app._add_profile("x", "X", ["app"], [], 0.0, 0.0, "")
+
+            self.assertIsNone(app.profiles[0].step)
+            self.assertIsNone(app.profiles[0].max_volume)
 
 
 class FakePulse:

@@ -29,9 +29,11 @@ Kirigami.OverlaySheet {
     signal deleteRequested(var profile)
 
     property string draftName: ""
-    property var draftApps: []
-    // What the chip list means: the applications to keep ("include"), or the
-    // applications to leave out ("exclude"), which is one list with two readings.
+    property var draftInclude: []
+    property var draftExclude: []
+    // What the chip list shows: the applications to keep ("include"), or the
+    // applications to leave out ("exclude").  A profile may carry both lists;
+    // the switch chooses which one is being edited, the other stays untouched.
     property string appliesTo: "include"
     property real draftStep: 0
     property bool stepDefault: true
@@ -48,8 +50,9 @@ Kirigami.OverlaySheet {
     readonly property string identifier: creating
         ? bridge.newProfileId(draftName)
         : (profile ? profile.id : "")
-    readonly property var includeList: appliesTo === "include" ? draftApps : []
-    readonly property var excludeList: appliesTo === "exclude" ? draftApps : []
+    readonly property var draftApps: appliesTo === "exclude" ? draftExclude : draftInclude
+    readonly property var includeList: draftInclude
+    readonly property var excludeList: draftExclude
 
     // The icon "Automatic" stands for: the first application the profile covers,
     // resolved the way the daemon draws it on the OSD.
@@ -70,16 +73,17 @@ Kirigami.OverlaySheet {
     // chips; a positioner would leave a gap for a hidden delegate, so they are
     // filtered out of the model instead.
     readonly property var playableApps: bridge.applications.filter(
-        application => draftApps.indexOf(application.id) === -1)
+        application => draftInclude.indexOf(application.id) === -1
+            && draftExclude.indexOf(application.id) === -1)
 
     function openFor(existing) {
         profile = existing
         if (existing) {
             draftName = existing.name || existing.id
-            const include = (existing.include || []).slice()
-            const exclude = (existing.exclude || []).slice()
-            appliesTo = include.length === 0 && exclude.length > 0 ? "exclude" : "include"
-            draftApps = appliesTo === "exclude" ? exclude : include
+            draftInclude = (existing.include || []).slice()
+            draftExclude = (existing.exclude || []).slice()
+            appliesTo = draftInclude.length === 0 && draftExclude.length > 0
+                ? "exclude" : "include"
             stepDefault = !(existing.step > 0)
             draftStep = existing.step > 0 ? existing.step : globalStep
             maxDefault = !(existing.max_volume > 0)
@@ -87,8 +91,9 @@ Kirigami.OverlaySheet {
             draftIcon = existing.icon || ""
         } else {
             draftName = ""
+            draftInclude = []
+            draftExclude = []
             appliesTo = "include"
-            draftApps = []
             stepDefault = true
             draftStep = globalStep
             maxDefault = true
@@ -99,16 +104,44 @@ Kirigami.OverlaySheet {
         open()
     }
 
+    function listFor(reading) {
+        return reading === "exclude" ? draftExclude : draftInclude
+    }
+
+    function setListFor(reading, values) {
+        if (reading === "exclude") {
+            draftExclude = values
+        } else {
+            draftInclude = values
+        }
+    }
+
+    function switchTo(reading) {
+        if (reading === appliesTo) {
+            return
+        }
+        if (listFor(reading).length === 0 && draftApps.length > 0) {
+            // No list of the other reading yet: reinterpret the visible one,
+            // so "Only these apps" flips to "All apps except…" without
+            // retyping it.
+            setListFor(reading, draftApps)
+            setListFor(appliesTo, [])
+        }
+        appliesTo = reading
+    }
+
     function addApplication(identifier) {
         const value = String(identifier).trim().toLowerCase()
         if (value.length === 0) {
             return
         }
-        draftApps = draftApps.concat([value]).filter((id, index, all) => all.indexOf(id) === index)
+        const updated = draftApps.concat([value]).filter(
+            (id, index, all) => all.indexOf(id) === index)
+        setListFor(appliesTo, updated)
     }
 
     function removeApplication(identifier) {
-        draftApps = draftApps.filter(id => id !== identifier)
+        setListFor(appliesTo, draftApps.filter(id => id !== identifier))
     }
 
     function iconOf(identifier) {
@@ -226,7 +259,7 @@ Kirigami.OverlaySheet {
                 current: sheet.appliesTo
                 accentColor: sheet.accentColor
                 accentTextColor: sheet.accentTextColor
-                onActivated: (key) => sheet.appliesTo = key
+                onActivated: (key) => sheet.switchTo(key)
             }
         }
 

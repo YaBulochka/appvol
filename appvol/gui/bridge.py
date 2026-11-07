@@ -110,14 +110,19 @@ class Bridge(QObject):
     @Slot()
     def refresh(self) -> None:
         """Reload the panel and the list of playing applications."""
-        overview = self._guard(self.client.overview)
+        overview = self._guard(self.client.overview, clear=False)
         if overview is not None:
             self._apply_overview(overview)
 
-        applications = self._guard(self.client.applications)
+        applications = self._guard(self.client.applications, clear=False)
         if applications is not None:
             self._applications = list(applications.get("applications", []))
             self.applicationsChanged.emit()
+
+        # One failed read is a real failure even when the other succeeds: the
+        # panel would otherwise keep stale data behind a cleared banner.
+        if overview is not None and applications is not None:
+            self._set_error("")
 
     @Slot(str, bool)
     def selectProfile(self, profile_id: str, osd: bool = False) -> None:
@@ -339,14 +344,19 @@ class Bridge(QObject):
         self.refresh()
         return True
 
-    def _guard(self, call: Callable[..., Any], *args):
-        """Run a daemon call, turning a failure into the error banner."""
+    def _guard(self, call: Callable[..., Any], *args, clear: bool = True):
+        """Run a daemon call, turning a failure into the error banner.
+
+        ``clear=False`` leaves a previous error alone, so a successful call can
+        be paired with another one before the banner is cleared.
+        """
         try:
             result = call(*args)
         except DaemonError as exc:
             self._set_error(str(exc))
             return None
-        self._set_error("")
+        if clear:
+            self._set_error("")
         return result
 
     def _set_error(self, message: str) -> None:

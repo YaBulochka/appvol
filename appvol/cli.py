@@ -103,7 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
     remove.add_argument("id")
     toggle = actions.add_parser("toggle", help="switch to a profile, or back to Active")
     toggle.add_argument("id", help="profile id, or active for the built-in profile")
-    actions.add_parser("reload", help="read profiles.toml again after a hand edit")
+    actions.add_parser(
+        "reload", help="read profiles.toml and config.toml again after a hand edit"
+    )
     return parser
 
 

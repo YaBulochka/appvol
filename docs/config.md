@@ -13,7 +13,9 @@ profile_idle_timeout = 300   # seconds before a profile returns to Active, 0 dis
 ```
 
 The window writes `step`, `osd_show_name` and `mode` here when they are changed
-in it; the daemon leaves the rest of the file to you.
+in it; the daemon leaves the rest of the file to you.  It reads the file at
+startup, adopts hand edits before its next write, and **Reload from File** in
+the window (or `appvol profile reload`) applies them immediately.
 
 The profiles live beside it, in `~/.config/appvol/profiles.toml`, and the daemon
 owns that file. The keys of a profile are documented in

@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import signal
 import sys
@@ -39,7 +40,8 @@ import pulsectl
 
 from . import __version__
 from .apps import application_profile, group_streams, in_appearance_order
-from .config import MODE_AUTO, MODE_PROFILES, Config, load as load_config, save as save_config
+from .config import HARD_MAX_VOLUME, MODE_AUTO, MODE_PROFILES, Config
+from .config import load as load_config, save as save_config
 from .config import default_path as default_config_path
 from .focus import Focus, focus_from_dbus, read_parent_pid
 from .icon import resolvable, resolve as resolve_icon
@@ -687,14 +689,24 @@ class Daemon(dbus.service.Object):
             identifier = validate_id(profile_id)
         except ValueError as exc:
             raise _invalid_argument(str(exc)) from None
+        step_value = _amount(step, "step")
+        max_value = _amount(max_volume, "max_volume")
+        if max_value > HARD_MAX_VOLUME:
+            log.warning(
+                "profile %s: max_volume %s clamped to %s",
+                identifier,
+                max_value,
+                HARD_MAX_VOLUME,
+            )
+            max_value = HARD_MAX_VOLUME
         profile = Profile(
             id=identifier,
             name=str(name).strip(),
             mode=MODE_STREAMS,
             include=_names(include),
             exclude=_names(exclude),
-            step=float(step) or None,
-            max_volume=float(max_volume) or None,
+            step=step_value or None,
+            max_volume=max_value or None,
             icon=str(icon).strip(),
         )
         known = find_profile(self.profiles, identifier) is not None
@@ -723,6 +735,19 @@ class Daemon(dbus.service.Object):
         log.info("removed profile %s", identifier)
         return self._profiles()
 
+    def _reload_config(self) -> None:
+        """Adopt hand edits from ``config.toml`` before the window writes it.
+
+        The window owns ``step``, ``osd_show_name`` and ``mode``.  A hand edit
+        to the ceiling, the timeout or ``osd`` while the daemon runs must not be
+        rolled back by the next write from the window.  The file is read again
+        first, and ``osd`` takes effect immediately.
+        """
+        if not self.config_path.exists():
+            return
+        self.config = load_config(self.config_path)
+        self.osd.enabled = self.config.osd
+
     def _set_step(self, profile_id: str, step: float) -> dict:
         """Change the step of one profile, or the global one for Active.
 
@@ -736,6 +761,7 @@ class Daemon(dbus.service.Object):
                 raise _invalid_argument(
                     "the global step must be positive; a profile step of 0 means the global one"
                 )
+            self._reload_config()
             self.config = replace(self.config, step=step)
             save_config(self.config, self.config_path)
             log.info("global step: %g%%", step)
@@ -750,6 +776,7 @@ class Daemon(dbus.service.Object):
 
     def _set_osd_show_name(self, show: bool) -> dict:
         """Store whether the OSD captions the application name."""
+        self._reload_config()
         self.config = replace(self.config, osd_show_name=show)
         save_config(self.config, self.config_path)
         log.info("osd show name: %s", show)
@@ -766,6 +793,7 @@ class Daemon(dbus.service.Object):
             raise _invalid_argument(
                 f"unknown mode {mode!r}: use {MODE_PROFILES!r} or {MODE_AUTO!r}"
             )
+        self._reload_config()
         if text != self.config.mode:
             self.config = replace(self.config, mode=text)
             save_config(self.config, self.config_path)
@@ -890,7 +918,8 @@ class Daemon(dbus.service.Object):
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def Reload(self) -> str:  # noqa: N802
-        """Read ``profiles.toml`` again, after a hand edit."""
+        """Read ``profiles.toml`` and ``config.toml`` again, after a hand edit."""
+        self._reload_config()
         self.load_profiles()
         return json.dumps(self._profiles())
 
@@ -1407,6 +1436,8 @@ def _amount(value: object, what: str = "step") -> float:
         number = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         raise _invalid_argument(f"{what} must be a number, got {value!r}") from None
+    if not math.isfinite(number):
+        raise _invalid_argument(f"{what} must be a finite number, got {value!r}")
     if number < 0:
         raise _invalid_argument(f"{what} must not be negative, got {number}")
     return number
