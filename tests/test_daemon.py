@@ -291,10 +291,37 @@ class CycleProfileTest(unittest.TestCase):
         profile, osd = app._feedback.call_args[0][0], app._feedback.call_args[1]["osd"]
         self.assertEqual((profile.id, osd), ("spotify", True))
 
+    def test_the_cycle_returns_the_feedback(self) -> None:
+        app = self.make([Profile(id="spotify")])
+
+        self.assertIs(app._cycle_profile(1), app._feedback.return_value)
+
+    def test_a_cycle_with_no_target_reports_why(self) -> None:
+        app = self.make([])
+
+        payload = app._cycle_profile(1)
+
+        self.assertEqual(payload["action"], "profile")
+        self.assertEqual(payload["current"], "active")
+        self.assertEqual(payload["matched"], 0)
+        self.assertIn("Active profile matches no stream", payload["reason"])
+
     def test_a_session_without_profiles_stays_on_active(self) -> None:
         app = self.make([])
         app._cycle_profile(1)
         self.assertEqual(app.state.selection.current, "active")
+
+    def test_next_and_previous_are_exposed_over_dbus(self) -> None:
+        app = self.make()
+        app._cycle_profile = mock.Mock(
+            side_effect=[{"ok": True, "step": 1}, {"ok": True, "step": -1}]
+        )
+
+        self.assertEqual(json.loads(app.NextProfile()), {"ok": True, "step": 1})
+        self.assertEqual(json.loads(app.PreviousProfile()), {"ok": True, "step": -1})
+        self.assertEqual(
+            app._cycle_profile.call_args_list, [mock.call(1), mock.call(-1)]
+        )
 
 
 class ShortcutServerRestartTest(unittest.TestCase):

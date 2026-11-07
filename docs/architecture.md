@@ -52,6 +52,8 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `SetMute(profile, muted)` | `sb -> s` | window | JSON result, absolute, without the OSD |
 | `SetStep(profile, step)` | `sd -> s` | window | JSON: the profiles after the change, with the global step for Active |
 | `SetMode(mode)` | `s -> s` | client, window | JSON: the profiles after the change, `mode` written to `config.toml` |
+| `NextProfile()` | ` -> s` | client | JSON: switch to the next target, with the OSD |
+| `PreviousProfile()` | ` -> s` | client | JSON: switch to the previous target, with the OSD |
 | `ToggleProfile(profile)` | `s -> s` | client, keys | switch the profile, answer describes the OSD |
 | `SwitchProfile(profile, osd)` | `sb -> s` | window | make a profile current, the toggle without the "back" |
 | `Profiles()` | ` -> s` | client | JSON: the targets the keys cycle, and the current one |
@@ -61,6 +63,10 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 | `RemoveProfile(id)` | `s -> s` | client, window | JSON: the profiles after the change |
 | `Reload()` | ` -> s` | client | read `profiles.toml` and `config.toml` again |
 | `List()` | ` -> s` | client | JSON: config, profile, focus, match, streams, OSD appearance |
+
+`NextProfile()` and `PreviousProfile()` run the same cycle as the **Next profile**
+and **Previous profile** keys, including the skip of an Active profile that
+matches no stream.
 
 An empty profile argument means the current profile, except in `ToggleProfile`
 where it means the built-in one. Errors: `org.appvol.Error.InvalidArgument` for a

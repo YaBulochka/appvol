@@ -86,7 +86,8 @@ it happens between ten and twenty seconds after the last press, and the log says
 stream, and the applications that are playing, and the log says `mode: auto` on
 the switch. Start
 and stop a player while it is on to see an application join the end of the cycle
-and leave it again; `appvol mode profiles` goes back.
+and leave it again; `appvol mode profiles` goes back. `appvol profile next` and
+`appvol profile prev` drive the same cycle from a terminal.
 
 ## The GUI in a live session
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import unittest
 
 from appvol.cli import (
@@ -11,6 +12,7 @@ from appvol.cli import (
     _print_list,
     _print_mode,
     _print_profiles,
+    _profile,
     _short,
     build_parser,
 )
@@ -51,9 +53,43 @@ class ParserTests(unittest.TestCase):
         )
         self.assertEqual(build_parser().parse_args(["profile", "rm", "cs2"]).id, "cs2")
 
+    def test_profile_next_and_prev(self) -> None:
+        self.assertEqual(
+            build_parser().parse_args(["profile", "next"]).profile_command, "next"
+        )
+        self.assertEqual(
+            build_parser().parse_args(["profile", "prev"]).profile_command, "prev"
+        )
+
     def test_an_unknown_osd_name_is_refused(self) -> None:
         with self.assertRaises(SystemExit):
             build_parser().parse_args(["profile", "add", "x", "--osd-name", "sometimes"])
+
+
+class CycleCommandTests(unittest.TestCase):
+    """The cycle the keys use is also reachable from the client."""
+
+    class Proxy:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def NextProfile(self) -> str:
+            self.calls.append("next")
+            return json.dumps({"ok": True, "action": "profile", "matched": 1})
+
+        def PreviousProfile(self) -> str:
+            self.calls.append("prev")
+            return json.dumps({"ok": True, "action": "profile", "matched": 1})
+
+    def test_next_and_prev_reach_the_daemon(self) -> None:
+        proxy = self.Proxy()
+
+        payload, kind = _profile(proxy, build_parser().parse_args(["profile", "next"]))
+        self.assertEqual((payload["action"], kind), ("profile", "short"))
+
+        payload, kind = _profile(proxy, build_parser().parse_args(["profile", "prev"]))
+        self.assertEqual((payload["action"], kind), ("profile", "short"))
+        self.assertEqual(proxy.calls, ["next", "prev"])
 
 
 def _render(result: dict) -> str:

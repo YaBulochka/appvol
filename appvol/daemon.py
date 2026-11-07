@@ -591,7 +591,7 @@ class Daemon(dbus.service.Object):
         log.info("profile: %s", self.state.selection.current)
         return self._feedback(self.current_profile(), osd)
 
-    def _cycle_profile(self, step: int) -> None:
+    def _cycle_profile(self, step: int) -> dict:
         """Switch to the next or the previous profile, with the OSD.
 
         The order is the one the window shows: the built-in Active profile first,
@@ -614,8 +614,11 @@ class Daemon(dbus.service.Object):
                 target = candidate
                 break
         if not target:
-            log.info("nothing to switch to: the Active profile matches no stream")
-            return
+            reason = "the Active profile matches no stream"
+            log.info("nothing to switch to: %s", reason)
+            return self._payload(
+                "profile", self.current_profile(), MatchResult(reason=reason)
+            )
         self.state.selection.select(target, time.monotonic())
         profile = self.current_profile()
         log.info("profile: %s", self.state.selection.current)
@@ -624,7 +627,7 @@ class Daemon(dbus.service.Object):
         # application that has stopped playing, or that is no longer focused.
         # Its name stays out of the caption, because Active covers every stream
         # of the focused window.
-        self._feedback(profile, osd=True, name_in_caption=profile.id != ACTIVE_ID)
+        return self._feedback(profile, osd=True, name_in_caption=profile.id != ACTIVE_ID)
 
     def _active_has_streams(self) -> bool:
         """Whether the built-in Active profile currently matches a stream."""
@@ -898,6 +901,16 @@ class Daemon(dbus.service.Object):
         ``config.toml`` so it survives a restart.
         """
         return json.dumps(self._set_mode(str(mode)))
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def NextProfile(self) -> str:  # noqa: N802
+        """Switch to the next profile or application, with the OSD."""
+        return json.dumps(self._cycle_profile(1))
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def PreviousProfile(self) -> str:  # noqa: N802
+        """Switch to the previous profile or application, with the OSD."""
+        return json.dumps(self._cycle_profile(-1))
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def Applications(self) -> str:  # noqa: N802
@@ -1217,6 +1230,7 @@ class Daemon(dbus.service.Object):
             "ok": True,
             "action": action,
             "profile": profile.summary(),
+            "current": self.state.selection.current,
             "matched": result.count,
             "match_step": result.step,
             "reason": result.reason,

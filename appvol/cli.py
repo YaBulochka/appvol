@@ -103,6 +103,8 @@ def build_parser() -> argparse.ArgumentParser:
     remove.add_argument("id")
     toggle = actions.add_parser("toggle", help="switch to a profile, or back to Active")
     toggle.add_argument("id", help="profile id, or active for the built-in profile")
+    actions.add_parser("next", help="switch to the next profile or application")
+    actions.add_parser("prev", help="switch to the previous profile or application")
     actions.add_parser(
         "reload", help="read profiles.toml and config.toml again after a hand edit"
     )
@@ -274,6 +276,10 @@ def _profile(proxy, args) -> tuple[dict, str]:
         return json.loads(proxy.Reload()), "profiles"
     if args.profile_command == "toggle":
         return json.loads(proxy.ToggleProfile(args.id)), "short"
+    if args.profile_command == "next":
+        return json.loads(proxy.NextProfile()), "short"
+    if args.profile_command == "prev":
+        return json.loads(proxy.PreviousProfile()), "short"
     print(f"appvol: unknown profile command {args.profile_command}", file=sys.stderr)
     raise SystemExit(EXIT_USAGE)
 

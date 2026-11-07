@@ -84,6 +84,8 @@ applications:
 appvol profile add spotify --include spotify --name Spotify
 appvol profile add desktop --exclude spotify --name "Everything but Spotify"
 appvol profile toggle spotify   # or press its key; press again to go back
+appvol profile next             # the same as the Next profile key
+appvol profile prev             # the same as the Previous profile key
 appvol profile list             # what exists, and which profile is current
 appvol up --profile spotify     # one call, without switching to it
 ```
