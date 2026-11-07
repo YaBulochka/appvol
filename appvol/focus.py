@@ -82,7 +82,13 @@ class Focus:
 
     @property
     def label(self) -> str:
-        """Human readable name used in logs and in ``appvol list``."""
+        """Human readable name used in logs and in ``appvol list``.
+
+        An empty focus has no name: ``"unknown"`` would read as an application
+        called that, while the ignored reason already says no window is active.
+        """
+        if self.is_empty():
+            return ""
         return self.desktop_file_name or self.resource_class or self.caption or "unknown"
 
 

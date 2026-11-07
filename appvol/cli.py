@@ -186,7 +186,14 @@ def _print_list(result: dict) -> None:
     print(f"profile: {head} [{profile.get('mode')}] {scope}")
     age = focus.get("age")
     age_text = f"{age:.1f}s ago" if isinstance(age, (int, float)) else "never"
-    print(f"focus:  pid {focus.get('pid')} {focus.get('label')!r} ({age_text})")
+    pid = focus.get("pid") or 0
+    label = focus.get("label") or ""
+    if label and pid:
+        print(f"focus:  pid {pid} {label!r} ({age_text})")
+    elif label:
+        print(f"focus:  {label!r} ({age_text})")
+    else:
+        print(f"focus:  none ({age_text})")
     if focus.get("resource_class") or focus.get("desktop_file_name"):
         print(f"        resourceClass={focus.get('resource_class')} desktopFileName={focus.get('desktop_file_name')}")
     if focus.get("ignored_reason"):
@@ -194,8 +201,15 @@ def _print_list(result: dict) -> None:
     print(f"match:  step={match.get('step') or '-'} matched={match.get('matched')} ({match.get('reason')})")
     if result.get("osd"):
         osd = result["osd"]
-        app = f" (app {osd['name']!r})" if osd.get("name") else ""
-        print(f"osd:    icon={osd.get('icon')!r}{app}")
+        icon = osd.get("icon") or ""
+        name = osd.get("name") or ""
+        if icon or name:
+            app = f" (app {name!r})" if name else ""
+            print(f"osd:    icon={icon!r}{app}")
+        elif match.get("matched"):
+            print("osd:    generic volume icon")
+        else:
+            print("osd:    No stream")
     print("streams:")
     streams = result.get("streams", [])
     if not streams:

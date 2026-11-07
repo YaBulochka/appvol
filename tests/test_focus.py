@@ -51,6 +51,10 @@ class NormalisationTests(unittest.TestCase):
         self.assertEqual(Focus(desktop_file_name="org.kde.konsole").label, "org.kde.konsole")
         self.assertEqual(Focus(caption="Konsole").label, "Konsole")
 
+    def test_an_empty_focus_has_no_label(self) -> None:
+        self.assertEqual(Focus().label, "")
+        self.assertEqual(Focus(pid=1).label, "unknown")
+
 
 class SteamAppIdTests(unittest.TestCase):
     """The Steam app id of a stream owner, for a game that is not focused."""

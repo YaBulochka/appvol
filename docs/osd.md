@@ -56,13 +56,13 @@ which Plasma renders as `<name> Muted`; a profile without one gets
 `showText(icon, "Muted")` instead. A ceiling other than 100% drops the caption,
 so the mute message is Plasma's generic `Audio Muted`. `unmute` shows the volume
 bar, or `Unmuted` through `showText` when the volume is zero and the bar would
-stay empty. A profile that matches nothing answers `no stream` instead of staying
+stay empty. A profile that matches nothing answers `No stream` instead of staying
 silent, because a profile key press is an explicit action on a target the user
 chose.
 
 The **Next profile** and **Previous profile** keys resolve Active against the
 focus of the moment, every time they land on it. They draw the icon and the
-current level of the focused window, or `no stream` when that window has no sink
+current level of the focused window, or `No stream` when that window has no sink
 input; the Active step never reuses the application it covered on an earlier
 pass, so an application that stopped playing cannot keep painting the OSD. Its
 name stays out of the caption, because Active covers every stream of the focused

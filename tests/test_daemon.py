@@ -550,6 +550,29 @@ class OsdShowNameTest(unittest.TestCase):
             self.assertTrue(stored.osd_show_name)
 
 
+class IgnoredFocusTest(unittest.TestCase):
+    """An ignored window is not an application the OSD can name."""
+
+    def make(self, focus: Focus) -> StepDaemon:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        app = StepDaemon(Path(tmp.name))
+        app.pulse = FakePulse()
+        app.state.update_focus(focus)
+        return app
+
+    def test_no_active_window_has_no_osd_application(self) -> None:
+        payload = self.make(Focus())._list()
+
+        self.assertEqual(payload["focus"]["label"], "")
+        self.assertEqual(payload["osd"], {"name": "", "icon": ""})
+
+    def test_a_panel_window_has_no_osd_application(self) -> None:
+        payload = self.make(Focus(pid=1, resource_class="plasmashell"))._list()
+
+        self.assertEqual(payload["osd"], {"name": "", "icon": ""})
+
+
 class RecordingPulse:
     """A stream snapshot and a place to write volumes to."""
 
@@ -926,7 +949,7 @@ class AutoModeTest(unittest.TestCase):
             app._cycle_profile(1)
 
         self.assertNotIn("wine-preloader", str(app.osd.calls[before:]))
-        self.assertEqual(app.osd.calls[-1], ("text", daemon.PROFILE_FALLBACK_ICON, "no stream"))
+        self.assertEqual(app.osd.calls[-1], ("text", daemon.PROFILE_FALLBACK_ICON, "No stream"))
 
     def test_landing_on_active_shows_the_focused_stream(self) -> None:
         spotify = Stream(
@@ -966,7 +989,7 @@ class AutoModeTest(unittest.TestCase):
         with mock.patch.object(daemon, "resolve_icon", return_value="konsole"):
             app._cycle_profile(-1)
 
-        self.assertEqual(app.osd.calls[-1], ("text", "konsole", "no stream"))
+        self.assertEqual(app.osd.calls[-1], ("text", "konsole", "No stream"))
 
     def test_an_application_target_is_resolvable(self) -> None:
         app = self.make([SPOTIFY_STREAM])

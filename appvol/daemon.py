@@ -670,7 +670,7 @@ class Daemon(dbus.service.Object):
             # leave the previous OSD on screen and make it look like the new
             # target.
             log.info("nothing to show for %s: %s", profile.id, result.reason)
-            self.osd.text(icon or PROFILE_FALLBACK_ICON, "no stream")
+            self.osd.text(icon or PROFILE_FALLBACK_ICON, "No stream")
         return payload
 
     def _add_profile(
@@ -953,6 +953,10 @@ class Daemon(dbus.service.Object):
             return name, self._profile_icon(profile, result, by_index)
 
         focus = self.state.focus
+        if focus.ignored_reason() is not None:
+            # An ignored focus is not a target: it matches no stream, so naming
+            # it on the OSD or in `appvol list` would invent an application.
+            return "", ""
         stream_name = ""
         for index in result.indices:
             stream_name = str(by_index[index].props.get("application.name") or "").strip()

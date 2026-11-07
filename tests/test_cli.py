@@ -226,6 +226,31 @@ class ListTests(unittest.TestCase):
         text = self.render({"id": "active", "name": "Active window", "mode": "focus"})
         self.assertIn("profile: active 'Active window' [focus] the focused window", text)
 
+    def test_no_active_window_has_no_unknown_application(self) -> None:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            _print_list(
+                {
+                    "config": {"step": 5, "max_volume": 100, "osd": True, "mode": "auto"},
+                    "profile": {"id": "active", "name": "Active window", "mode": "focus"},
+                    "focus": {
+                        "pid": 0,
+                        "label": "",
+                        "age": 1.4,
+                        "ignored_reason": "no active window",
+                    },
+                    "match": {"step": "", "reason": "no active window", "matched": 0},
+                    "osd": {"name": "", "icon": ""},
+                    "streams": [],
+                }
+            )
+        text = buffer.getvalue()
+
+        self.assertIn("focus:  none (1.4s ago)", text)
+        self.assertIn("osd:    No stream", text)
+        self.assertNotIn("unknown", text)
+        self.assertNotIn("pid 0", text)
+
 
 class ModeTests(unittest.TestCase):
     def test_the_mode_is_spelled_out(self) -> None:
