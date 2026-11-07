@@ -199,8 +199,17 @@ class PulseManager:
         with self._lock:
             last_error: Exception | None = None
             for attempt in (0, 1):
-                pulse = self._pulse if (attempt == 0 and self.connected) else self._connect_locked()
                 try:
+                    # Connecting is part of the attempt: a stopped
+                    # pipewire-pulse makes the constructor raise PulseError, and
+                    # that is the same kind of transient failure as a dropped
+                    # call, so it takes the same retry and the same RuntimeError
+                    # the callers above handle.
+                    pulse = (
+                        self._pulse
+                        if (attempt == 0 and self.connected)
+                        else self._connect_locked()
+                    )
                     return operation(pulse)
                 except Exception as exc:  # noqa: BLE001 - connection errors are expected
                     last_error = exc

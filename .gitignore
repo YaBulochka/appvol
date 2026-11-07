@@ -11,3 +11,6 @@ packaging/*.sha256
 packaging/*.pkg.tar.*
 packaging/src/
 packaging/pkg/
+
+# Local working plan, not part of the project.
+PLAN.md

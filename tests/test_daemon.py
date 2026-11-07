@@ -330,6 +330,80 @@ class StepDaemon(daemon.Daemon):
         self.state = daemon.State()
 
 
+class PulseManagerFailureTest(unittest.TestCase):
+    """A stopped pipewire-pulse is a transient failure, not a crash.
+
+    ``pulsectl.Pulse()`` itself raises ``PulseError`` when the server is gone,
+    while the daemon's callers handle a failed operation as ``RuntimeError``.
+    The manager has to turn both into the same answer, so the keepalive timer,
+    the auto mode and the overview survive a restart of the audio server.
+    """
+
+    def test_a_missing_server_is_reported_as_a_runtime_error(self) -> None:
+        manager = daemon.PulseManager()
+        with mock.patch.object(
+            daemon.pulsectl, "Pulse", side_effect=daemon.pulsectl.PulseError("gone")
+        ) as pulse:
+            with self.assertRaises(RuntimeError) as caught:
+                manager.streams()
+
+        self.assertIn("sink_input_list", str(caught.exception))
+        self.assertEqual(pulse.call_count, 2)
+
+    def test_the_keepalive_swallows_a_missing_server(self) -> None:
+        manager = daemon.PulseManager()
+        with mock.patch.object(
+            daemon.pulsectl, "Pulse", side_effect=daemon.pulsectl.PulseError("gone")
+        ):
+            manager.keepalive()
+
+    def test_the_auto_mode_reads_no_streams_without_a_server(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+            app.pulse = daemon.PulseManager()
+
+            with mock.patch.object(
+                daemon.pulsectl, "Pulse", side_effect=daemon.pulsectl.PulseError("gone")
+            ):
+                self.assertIsNone(app._read_streams())
+
+    def test_the_overview_survives_a_missing_server(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+            app.pulse = daemon.PulseManager()
+
+            with mock.patch.object(
+                daemon.pulsectl, "Pulse", side_effect=daemon.pulsectl.PulseError("gone")
+            ):
+                overview = app._overview()
+
+        self.assertEqual(overview["profiles"][0]["id"], "active")
+        self.assertIsNone(overview["profiles"][0]["matched"])
+
+    def test_a_lost_call_is_retried_on_a_new_connection(self) -> None:
+        manager = daemon.PulseManager()
+        calls: list[object] = []
+
+        class FakePulse:
+            connected = True
+
+            def server_info(self):
+                calls.append(self)
+                if len(calls) == 1:
+                    raise daemon.pulsectl.PulseError("dropped")
+                return object()
+
+            def close(self) -> None:
+                pass
+
+        with mock.patch.object(
+            daemon.pulsectl, "Pulse", side_effect=lambda _name: FakePulse()
+        ):
+            manager.keepalive()
+
+        self.assertEqual(len(calls), 2)
+
+
 class SetStepTest(unittest.TestCase):
     """The step of a row: one profile's own, or the global one for Active.
 
