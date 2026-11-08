@@ -1,3 +1,62 @@
+# appvol 0.8.1 (2026-11-08)
+
+The profile cycle now skips Active while it matches no stream, and the CLI gains
+`appvol profile next` / `appvol profile prev`.
+
+## Changed
+
+- **Next profile and Previous profile skip Active while it matches no stream.**
+  On the desktop the keys no longer stop on a target that can only answer
+  `No stream`; Active returns to the cycle as soon as the focused window has a
+  stream. An explicit profile key, the window's radio and
+  `appvol profile toggle active` still select Active on purpose.
+- **The window follows the daemon immediately.** A new D-Bus `Changed` signal
+  makes a hotkey, a profile switch, a focus change, a volume change or a mute
+  update the window at once. The half-second poll stays as a safety net for
+  changes made outside appvol.
+- **Zero percent is not mute.** The OSD shows `0%` at zero volume and reserves
+  `Muted` for a profile whose matched streams are all muted.
+- **The profile editor keeps both lists.** `include` and `exclude` are separate
+  drafts now, so editing a profile that has both no longer drops `exclude` on
+  Save.
+- **Keyboard and wheel moves on a volume slider are applied** after a short
+  pause, in steps of one percent.
+- **The footer shows seconds below a minute**, e.g. `20 s` instead of `0 min`.
+
+## Added
+
+- `appvol profile next` and `appvol profile prev`, backed by the new
+  `NextProfile()` and `PreviousProfile()` D-Bus methods. They use the same cycle
+  as the keys, including the skip of an empty Active.
+- The `Changed` signal on the `org.appvol.Daemon` interface.
+
+## Fixed
+
+- The daemon survives a stopped `pipewire-pulse` at startup and during a
+  session. It retries on a fresh connection and reports a readable warning
+  instead of crashing. A two-second backoff keeps the window poll from hammering
+  the socket, warnings are rate-limited, and recovery is logged once.
+- Hand edits to `config.toml` keys the window does not own survive a change of
+  step, mode or OSD name. **Reload from File** and `appvol profile reload` now
+  read `config.toml` too.
+- `AddProfile` rejects negative and non-finite `step` and `max_volume` values,
+  and clamps a ceiling above 150.
+- A failed `Overview()` is no longer cleared by a successful `Applications()`
+  call in the window.
+- The editor's **Matches now** line and automatic icon follow applications that
+  start or stop while the editor is open.
+- `applicationsChanged` is emitted only when the application list really
+  changed.
+- A file profile without an explicit icon shows its automatic application icon
+  in the window, not only in the editor.
+- An ignored focus is no longer named `"unknown"` in `appvol list` or the OSD;
+  the list prints `focus: none`.
+- The empty-target OSD caption is `No stream`.
+- `appvol-gui` declares `python3-pyside6.qtdbus` for split Debian/Ubuntu
+  PySide6 installs.
+
+Full commit list: https://github.com/YaBulochka/appvol/compare/v0.8.0...v0.8.1
+
 # appvol 0.8.0 (2026-11-06)
 
 This release closes the two follow-ups to 0.7.3: a focused application no longer
