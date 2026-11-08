@@ -765,6 +765,73 @@ class IgnoredFocusTest(unittest.TestCase):
         self.assertEqual(payload["osd"], {"name": "", "icon": ""})
 
 
+class OsdZeroAndMuteTest(unittest.TestCase):
+    """Zero is not mute, and Muted means every stream is muted."""
+
+    PROFILE = Profile(id="spotify", include=("spotify",))
+
+    def make(self, tmp: str, streams) -> StepDaemon:
+        app = StepDaemon(Path(tmp), [self.PROFILE])
+        app.pulse = RecordingPulse(streams)
+        app.osd = RecordingOsd()
+        return app
+
+    def test_zero_percent_without_mute_is_shown_as_zero(self) -> None:
+        stream = Stream(
+            index=1, props={"application.name": "Spotify"}, volume=(0.0,), mute=False
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp, [stream])
+            with mock.patch.object(daemon, "resolve_icon", return_value="spotify"):
+                app._adjust(daemon.DOWN, 0.0, self.PROFILE)
+
+        self.assertEqual(app.osd.calls[-1], ("text", "spotify", "0%"))
+
+    def test_a_fully_muted_profile_says_muted(self) -> None:
+        stream = Stream(
+            index=1, props={"application.name": "Spotify"}, volume=(0.5,), mute=True
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp, [stream])
+            with mock.patch.object(daemon, "resolve_icon", return_value="spotify"):
+                app._adjust(daemon.DOWN, 0.0, self.PROFILE)
+
+        self.assertEqual(app.osd.calls[-1], ("volume", 0, "spotify", "", 100))
+
+    def test_a_partially_muted_profile_shows_the_level(self) -> None:
+        streams = [
+            Stream(
+                index=1,
+                props={"application.name": "Spotify"},
+                volume=(0.5,),
+                mute=True,
+            ),
+            Stream(
+                index=2,
+                props={"application.name": "Spotify"},
+                volume=(0.5,),
+                mute=False,
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp, streams)
+            with mock.patch.object(daemon, "resolve_icon", return_value="spotify"):
+                app._adjust(daemon.DOWN, 0.0, self.PROFILE)
+
+        self.assertEqual(app.osd.calls[-1], ("volume", 45, "spotify", "", 100))
+
+    def test_unmuting_at_zero_shows_zero(self) -> None:
+        stream = Stream(
+            index=1, props={"application.name": "Spotify"}, volume=(0.0,), mute=True
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.make(tmp, [stream])
+            with mock.patch.object(daemon, "resolve_icon", return_value="spotify"):
+                app._toggle_mute(self.PROFILE)
+
+        self.assertEqual(app.osd.calls[-1], ("text", "spotify", "0%"))
+
+
 class RecordingPulse:
     """A stream snapshot and a place to write volumes to."""
 
@@ -918,6 +985,26 @@ class ProfileIconTest(unittest.TestCase):
             self.icon_of(app, profile)
 
         self.assertEqual(resolve.call_args.kwargs["pid"], 0)
+
+    def test_a_file_profile_gets_its_automatic_icon_in_the_overview(self) -> None:
+        profile = Profile(id="music", include=("spotify",))
+        app = self.make(profile, [SPOTIFY_STREAM])
+
+        with mock.patch.object(daemon, "resolve_icon", return_value="spotify"):
+            overview = app._overview()
+
+        music = next(entry for entry in overview["profiles"] if entry["id"] == "music")
+        self.assertEqual(music["icon"], "spotify")
+
+    def test_an_explicit_profile_icon_wins_in_the_overview(self) -> None:
+        profile = Profile(id="music", include=("spotify",), icon="firefox")
+        app = self.make(profile, [SPOTIFY_STREAM])
+
+        with mock.patch.object(daemon, "resolvable", return_value=True):
+            overview = app._overview()
+
+        music = next(entry for entry in overview["profiles"] if entry["id"] == "music")
+        self.assertEqual(music["icon"], "firefox")
 
 
 class AutoModeTest(unittest.TestCase):

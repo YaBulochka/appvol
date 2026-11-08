@@ -22,8 +22,9 @@ appvol prefers the first method whenever the icon is known. Whether the `name`
 argument is filled in comes from **OSD App Name**, the one switch in the window:
 off by default, the OSD shows the icon alone; on, it captions the
 application name — both for stream profiles and for the Active one. A stream profile reads
-"Spotify" with the volume bar and "Spotify Muted" at zero percent, while a volume
-key on the focused window shows that window's icon and the bar and no name. The
+"Spotify" with the volume bar while it has a level, and "Spotify Muted" only when
+every matched stream is muted; a zero level that is not muted is shown as "0%". A
+volume key on the focused window shows that window's icon and the bar and no name. The
 name of the Active profile is still computed, `appvol list` prints it for
 diagnostics, and the reply keeps it for a client that wants to show it.
 
@@ -54,11 +55,13 @@ osd:    icon='spotify' (app 'Spotify')
 `mute` on a profile with a caption uses the media player form with a value of zero,
 which Plasma renders as `<name> Muted`; a profile without one gets
 `showText(icon, "Muted")` instead. A ceiling other than 100% drops the caption,
-so the mute message is Plasma's generic `Audio Muted`. `unmute` shows the volume
-bar, or `Unmuted` through `showText` when the volume is zero and the bar would
-stay empty. A profile that matches nothing answers `No stream` instead of staying
-silent, because a profile key press is an explicit action on a target the user
-chose.
+so the mute message is Plasma's generic `Audio Muted`. A profile counts as muted
+only when every matched stream is muted; when only some are, the OSD shows the
+loudest remaining level. `unmute` shows the volume bar, or `0%` through `showText`
+when the volume is zero and the bar would stay empty, because zero percent is not
+the same as mute. A profile that matches nothing answers `No stream` instead of
+staying silent, because a profile key press is an explicit action on a target the
+user chose.
 
 The **Next profile** and **Previous profile** keys skip Active while it matches
 no stream, so the cycle does not stop on a target that would only answer `No

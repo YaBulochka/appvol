@@ -22,9 +22,30 @@ Controls.Slider {
     to: maximum
     enabled: hasVolume
     value: hasVolume ? profile.percent : 0
+    // The keyboard and the wheel move in whole percent; dragging stays smooth.
+    stepSize: 1
+    snapMode: Controls.Slider.NoSnap
 
-    onPressedChanged: if (!pressed && hasVolume) {
-        bridge.setVolume(profile.id, Math.round(value))
+    // A keyboard or wheel move has no drag to release: send the settled value
+    // after a short pause instead.  A mouse drag still sends once, on release.
+    Timer {
+        id: writeDelay
+        interval: 150
+        repeat: false
+        onTriggered: {
+            if (slider.hasVolume && !slider.pressed) {
+                bridge.setVolume(slider.profile.id, Math.round(slider.value))
+            }
+        }
+    }
+
+    onMoved: if (!pressed && hasVolume) writeDelay.restart()
+
+    onPressedChanged: {
+        writeDelay.stop()
+        if (!pressed && hasVolume) {
+            bridge.setVolume(profile.id, Math.round(value))
+        }
     }
 
     Connections {

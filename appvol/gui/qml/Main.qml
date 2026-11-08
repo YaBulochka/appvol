@@ -48,12 +48,19 @@ Kirigami.ApplicationWindow {
     readonly property color accentColor: Kirigami.Theme.highlightColor
     readonly property color accentTextColor: Kirigami.Theme.highlightedTextColor
 
+    function idleText(seconds) {
+        const value = Number(seconds)
+        return value < 60
+            ? Math.round(value) + " s"
+            : Math.round(value / 60) + " min"
+    }
+
     readonly property string footerSummary: {
         if (autoMode) {
             return "Keys cycle the running applications, plus Active while it has a stream"
         }
         if (bridge.idleTimeout > 0) {
-            return "Idle profiles return to Active after " + Math.round(bridge.idleTimeout / 60) + " min"
+            return "Idle profiles return to Active after " + idleText(bridge.idleTimeout)
         }
         return "A profile stays current until you switch"
     }
@@ -63,7 +70,7 @@ Kirigami.ApplicationWindow {
                 + " A per-profile key does nothing here; switch back to the profiles to use one."
         }
         const idle = bridge.idleTimeout > 0
-            ? "A profile goes back to Active after " + Math.round(bridge.idleTimeout / 60) + " minutes without use."
+            ? "A profile goes back to Active after " + idleText(bridge.idleTimeout) + " without use."
             : "A profile stays current until you switch."
         return idle + " The volume keys and the profile keys are set in System Settings → Shortcuts, entry “Appvol”."
     }

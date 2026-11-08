@@ -406,6 +406,12 @@ class BridgeTests(unittest.TestCase):
         with mock.patch.object(gui_bridge, "resolve_icon", return_value=None):
             self.assertEqual(bridge.profileIcon(["nope"], []), "")
 
+    def test_the_live_slots_accept_a_revision(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        self.assertEqual(bridge.profileIcon(["spotify"], [], 7), "spotify")
+        self.assertEqual(bridge.matchesNow([], [], 7), bridge.matchesNow([], []))
+
     def test_an_application_icon_comes_from_the_live_list(self) -> None:
         bridge = self.make()
         bridge.refresh()
@@ -583,6 +589,31 @@ class RefreshSignalTests(unittest.TestCase):
         moved = {**OVERVIEW, "profiles": [active, {**spotify, "percent": 40}]}
         self.proxy.__dict__["answers"]["Overview"] = moved
         bridge.refresh()
+        self.assertEqual(len(seen), 1)
+
+    def test_the_applications_signal_stays_quiet_when_nothing_changed(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        seen = []
+        bridge.applicationsChanged.connect(lambda: seen.append(1))
+
+        bridge.refresh()
+
+        self.assertEqual(seen, [])
+
+    def test_the_applications_signal_fires_when_a_stream_starts(self) -> None:
+        bridge = self.make()
+        bridge.refresh()
+        seen = []
+        bridge.applicationsChanged.connect(lambda: seen.append(1))
+        started = dict(APPLICATIONS["applications"][0], id="firefox", label="Firefox")
+        self.proxy.__dict__["answers"]["Applications"] = {
+            **APPLICATIONS,
+            "applications": [*APPLICATIONS["applications"], started],
+        }
+
+        bridge.refresh()
+
         self.assertEqual(len(seen), 1)
 
 

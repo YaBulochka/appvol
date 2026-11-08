@@ -40,6 +40,9 @@ Kirigami.OverlaySheet {
     property real draftMax: 0
     property bool maxDefault: true
     property string draftIcon: ""
+    // Bumped when the playing applications change; the Python slots cache
+    // their answer, so a binding must see this property to re-evaluate.
+    property int applicationsRevision: 0
 
     readonly property bool creating: profile === null
     readonly property real globalStep: bridge.config.step || 5
@@ -57,18 +60,20 @@ Kirigami.OverlaySheet {
     // The icon "Automatic" stands for: the first application the profile covers,
     // resolved the way the daemon draws it on the OSD.
     readonly property string automaticIcon:
-        bridge.profileIcon(includeList, excludeList) || "audio-volume-high"
+        bridge.profileIcon(includeList, excludeList, applicationsRevision)
+            || "audio-volume-high"
     readonly property string previewIcon: draftIcon || automaticIcon
     readonly property string iconCaption: {
         if (draftIcon) {
             return "chosen from the theme"
         }
-        return bridge.profileIcon(includeList, excludeList)
+        return bridge.profileIcon(includeList, excludeList, applicationsRevision)
             ? "from the application"
             : "generic: no single application"
     }
     // The live answer to "what would this profile select right now".
-    readonly property var matches: bridge.matchesNow(includeList, excludeList)
+    readonly property var matches: bridge.matchesNow(
+        includeList, excludeList, applicationsRevision)
     // What is playing and the profile does not name yet, for the "Playing now"
     // chips; a positioner would leave a gap for a hidden delegate, so they are
     // filtered out of the model instead.
@@ -632,6 +637,13 @@ Kirigami.OverlaySheet {
                     }
                 }
             }
+        }
+    }
+
+    Connections {
+        target: bridge
+        function onApplicationsChanged() {
+            sheet.applicationsRevision++
         }
     }
 

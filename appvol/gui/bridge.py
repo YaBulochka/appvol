@@ -144,8 +144,10 @@ class Bridge(QObject):
 
         applications = self._guard(self.client.applications, clear=False)
         if applications is not None:
-            self._applications = list(applications.get("applications", []))
-            self.applicationsChanged.emit()
+            entries = list(applications.get("applications", []))
+            if entries != self._applications:
+                self._applications = entries
+                self.applicationsChanged.emit()
 
         # One failed read is a real failure even when the other succeeds: the
         # panel would otherwise keep stale data behind a cleared banner.
@@ -239,8 +241,9 @@ class Bridge(QObject):
             names = names[:limit]
         return list(names)
 
+    @Slot("QVariantList", "QVariantList", int, result=str)
     @Slot("QVariantList", "QVariantList", result=str)
-    def profileIcon(self, include: list, exclude: list) -> str:
+    def profileIcon(self, include: list, exclude: list, _revision: int = 0) -> str:
         """The automatic icon of a draft profile: its first include, else exclude.
 
         The editor shows this while no icon is chosen, so the button previews
@@ -276,8 +279,9 @@ class Bridge(QObject):
         """The number typed into a step field, tolerant of a comma and the " %" suffix."""
         return _parse_number(str(text))
 
+    @Slot("QVariantList", "QVariantList", int, result="QVariantMap")
     @Slot("QVariantList", "QVariantList", result="QVariantMap")
-    def matchesNow(self, include: list, exclude: list) -> dict:
+    def matchesNow(self, include: list, exclude: list, _revision: int = 0) -> dict:
         """What a draft profile selects right now, for the editor's live line.
 
         Empty ``include`` means every application stream with the shell left out,

@@ -693,11 +693,16 @@ class Daemon(dbus.service.Object):
             if osd:
                 caption = osd_caption(self.config.osd_show_name and name_in_caption, name)
                 maximum = self._max_percent_of(profile)
-                if any(stream.mute for stream in matched_streams):
-                    # A muted stream keeps its volume level, so a bar would
-                    # show a volume the application does not actually have.
-                    # Zero makes Plasma render "<name> Muted" instead.
+                if all(stream.mute for stream in matched_streams):
+                    # A fully muted target keeps its volume level, so a bar
+                    # would show a volume the application does not actually
+                    # have.  Zero makes Plasma render "<name> Muted".
                     self.osd.volume_changed(0, icon=icon, name=caption, maximum=maximum)
+                elif percent == 0:
+                    # Zero percent is not mute: Plasma would label a zero
+                    # mediaPlayerVolumeChanged as "<name> Muted", so print the
+                    # real level instead.
+                    self.osd.text(icon or PROFILE_FALLBACK_ICON, "0%")
                 else:
                     self.osd.volume_changed(
                         percent,
@@ -1171,10 +1176,14 @@ class Daemon(dbus.service.Object):
             matched_streams = [by_index[index] for index in result.indices]
             caption = osd_caption(self.config.osd_show_name, name)
             maximum = self._max_percent_of(profile)
-            if any(stream.mute for stream in matched_streams):
-                # A muted stream keeps its volume level: zero makes Plasma
-                # render "<name> Muted" instead of a bar the app does not have.
+            if all(stream.mute for stream in matched_streams):
+                # A fully muted target keeps its volume level: zero makes
+                # Plasma render "<name> Muted" instead of a bar the app does
+                # not have.
                 self.osd.volume_changed(0, icon=icon, name=caption, maximum=maximum)
+            elif payload["percent"] == 0:
+                # Zero percent is not mute; see the profile-switch path.
+                self.osd.text(icon or PROFILE_FALLBACK_ICON, "0%")
             else:
                 self.osd.volume_changed(
                     payload["percent"],
@@ -1244,14 +1253,14 @@ class Daemon(dbus.service.Object):
             elif payload["percent"]:
                 self.osd.volume_changed(payload["percent"], icon=icon, name=name, maximum=maximum)
             else:
-                self.osd.text(icon, "Unmuted")
+                self.osd.text(icon or PROFILE_FALLBACK_ICON, "0%")
         elif mute:
-            self.osd.text(icon, "Muted")
+            self.osd.text(icon or PROFILE_FALLBACK_ICON, "Muted")
         elif payload["percent"]:
             self.osd.volume_changed(payload["percent"], icon=icon, maximum=maximum)
         else:
-            # Nothing to show on the progress bar.
-            self.osd.text(icon, "Unmuted")
+            # Zero percent is not mute: show the real level, not "Unmuted".
+            self.osd.text(icon or PROFILE_FALLBACK_ICON, "0%")
         if applied:
             self._notify_changed()
         return payload
@@ -1387,7 +1396,6 @@ class Daemon(dbus.service.Object):
             streams = None
 
         by_index = {stream.index: stream for stream in streams} if streams else {}
-        auto = self.config.mode == MODE_AUTO
         # Reading the targets can move the selection back to Active when the
         # focused application left the auto list; report the selection after it.
         targets = self._targets(streams)
@@ -1420,10 +1428,12 @@ class Daemon(dbus.service.Object):
                         else None,
                     }
                 )
-                if auto and not entry["builtin"] and matched_streams:
-                    # An auto target has no icon of its own: the window shows the
-                    # icon the profile resolves, from its matched streams and
-                    # their process, the same one the OSD uses.
+                if not entry["builtin"] and not profile.icon:
+                    # A file profile and an auto target have no icon of their
+                    # own when the icon key is empty: the window shows the icon
+                    # the profile resolves, from its matched streams and their
+                    # process, the same one the OSD uses.  Active keeps the
+                    # window icon.
                     entry["icon"] = self._profile_icon(profile, result, by_index)
             entries.append(entry)
 
