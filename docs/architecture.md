@@ -68,6 +68,11 @@ Bus name `org.appvol.Daemon`, object `/org/appvol/Daemon`, interface
 and **Previous profile** keys, including the skip of an Active profile that
 matches no stream.
 
+`Changed()` is a signal on the same interface, with no arguments. The daemon emits
+it after a focus, selection, profile or configuration change, and after it moves
+the volume or mute of a stream. The window subscribes over QtDBus and refreshes at
+once; its half-second poll stays as the safety net for changes made outside appvol.
+
 An empty profile argument means the current profile, except in `ToggleProfile`
 where it means the built-in one. Errors: `org.appvol.Error.InvalidArgument` for a
 bad direction, a negative step, an unknown profile or an unknown action; the

@@ -23,6 +23,8 @@ Kirigami.ApplicationWindow {
     // A hotkey may change the volume while the window is open, so every time
     // the window comes back to the front the panel is read again.
     onActiveChanged: if (active) bridge.refresh()
+    // A hidden window ignores the daemon's push; the timer is stopped as well.
+    onVisibleChanged: bridge.setVisible(visible)
 
     readonly property var activeProfile: {
         for (let i = 0; i < bridge.profiles.length; ++i) {
@@ -66,12 +68,11 @@ Kirigami.ApplicationWindow {
         return idle + " The volume keys and the profile keys are set in System Settings → Shortcuts, entry “Appvol”."
     }
 
-    // The volume of a target can change outside the window: the hotkeys, or
-    // another application on the same streams.  A light poll keeps the sliders
-    // honest while the window is on screen; a hidden window makes no calls.
-    // Half a second is close enough to the keys, and an idle overview costs the
-    // daemon well under a millisecond (the icon theme is cached), so the timer
-    // is cheap.
+    // appvold emits Changed for the changes it makes itself, so a hotkey, a
+    // profile switch or a focus change lands immediately.  The half-second poll
+    // is the safety net for changes from outside appvol: another mixer moving
+    // the same stream, or an application that starts or stops playing.  A
+    // hidden window makes no calls.
     Timer {
         interval: 500
         running: root.visible

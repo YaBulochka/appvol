@@ -86,11 +86,13 @@ return, the long text that used to sit in the footer. When `appvold` is not
 running, a banner says so and offers **Try Again**, and the list stays empty
 instead of pretending.
 
-The window reads the whole panel with one `Overview()` call and refreshes it when
-it gains focus, when a button asks for it, after every write, and every half
-second while it is on screen. The timer keeps the sliders in step with the volume
-keys and any other application that moves the same streams, so **Refresh** is only
-needed after a change the window could not see.
+The window reads the whole panel with one `Overview()` call. The daemon emits
+`Changed` for the changes it makes itself, so a hotkey, a profile switch or a
+focus change lands immediately. The window still refreshes every half second as a
+safety net for changes from outside appvol, such as another mixer moving the same
+stream or an application that starts or stops playing. It also refreshes when it
+gains focus, when a button asks for it, and after every write, so **Refresh** is
+only needed after a change the window could not see.
 
 Closing the window quits the GUI. The daemon and the hotkeys run on their own, so
 nothing else stops: open the window to change a setting, close it to leave.

@@ -445,6 +445,14 @@ class Daemon(dbus.service.Object):
         self.config_path = Path(config_path) if config_path else default_config_path()
         self.shortcuts = ShortcutActions(bus, self.on_shortcut)
 
+    @dbus.service.signal(IFACE, signature="")
+    def Changed(self) -> None:  # noqa: N802
+        """Emitted when the state the window draws may have changed."""
+
+    def _notify_changed(self) -> None:
+        """Tell clients that the panel may have changed."""
+        self.Changed()
+
     # -- profiles ----------------------------------------------------------
 
     def load_profiles(self) -> None:
@@ -462,6 +470,7 @@ class Daemon(dbus.service.Object):
         self.shortcuts.sync(self.profiles)
         log.debug("profiles from %s: %s",
                   self.profiles_path, ", ".join(profile.id for profile in self.profiles) or "none")
+        self._notify_changed()
 
     def _targets(self, streams: Sequence[Stream] | None = None) -> list[Profile]:
         """The targets the volume keys act on, in the order they cycle.
@@ -545,7 +554,10 @@ class Daemon(dbus.service.Object):
 
     def expire_profile(self) -> bool:
         """Move back to Active when the current profile is idle."""
-        return self.state.selection.expire(time.monotonic(), self.config.profile_idle_timeout)
+        moved = self.state.selection.expire(time.monotonic(), self.config.profile_idle_timeout)
+        if moved:
+            self._notify_changed()
+        return moved
 
     def _profile(self, profile_id: str) -> Profile:
         """Resolve a profile id; an empty id means the current profile."""
@@ -589,6 +601,7 @@ class Daemon(dbus.service.Object):
         """Switch to a profile, or back to Active when it is already current."""
         self.state.selection.toggle(self._switch_target(profile_id).id, time.monotonic())
         log.info("profile: %s", self.state.selection.current)
+        self._notify_changed()
         return self._feedback(self.current_profile(), osd)
 
     def _cycle_profile(self, step: int) -> dict:
@@ -627,6 +640,7 @@ class Daemon(dbus.service.Object):
         # application that has stopped playing, or that is no longer focused.
         # Its name stays out of the caption, because Active covers every stream
         # of the focused window.
+        self._notify_changed()
         return self._feedback(profile, osd=True, name_in_caption=profile.id != ACTIVE_ID)
 
     def _active_has_streams(self) -> bool:
@@ -648,6 +662,7 @@ class Daemon(dbus.service.Object):
         """Make a profile current, the explicit form of the toggle."""
         self.state.selection.select(self._switch_target(profile_id).id, time.monotonic())
         log.info("profile: %s", self.state.selection.current)
+        self._notify_changed()
         return self._feedback(self.current_profile(), osd)
 
     def _feedback(self, profile: Profile, osd: bool = True, name_in_caption: bool = True) -> dict:
@@ -744,6 +759,7 @@ class Daemon(dbus.service.Object):
                  identifier,
                  list(profile.include) or "everything",
                  list(profile.exclude) or "nothing")
+        self._notify_changed()
         return self._profiles()
 
     def _remove_profile(self, profile_id) -> dict:
@@ -756,6 +772,7 @@ class Daemon(dbus.service.Object):
         save_profiles(self.profiles, self.profiles_path)
         self.shortcuts.sync(self.profiles)
         log.info("removed profile %s", identifier)
+        self._notify_changed()
         return self._profiles()
 
     def _reload_config(self) -> None:
@@ -788,6 +805,7 @@ class Daemon(dbus.service.Object):
             self.config = replace(self.config, step=step)
             save_config(self.config, self.config_path)
             log.info("global step: %g%%", step)
+            self._notify_changed()
             return self._profiles()
 
         if find_profile(self.profiles, identifier) is None:
@@ -795,6 +813,7 @@ class Daemon(dbus.service.Object):
         self.profiles = replace_step(self.profiles, identifier, step)
         save_profiles(self.profiles, self.profiles_path)
         log.info("profile %s: step %s", identifier, f"{step:g}%" if step else "the global one")
+        self._notify_changed()
         return self._profiles()
 
     def _set_osd_show_name(self, show: bool) -> dict:
@@ -803,6 +822,7 @@ class Daemon(dbus.service.Object):
         self.config = replace(self.config, osd_show_name=show)
         save_config(self.config, self.config_path)
         log.info("osd show name: %s", show)
+        self._notify_changed()
         return self._profiles()
 
     def _set_mode(self, mode: str) -> dict:
@@ -822,6 +842,7 @@ class Daemon(dbus.service.Object):
             save_config(self.config, self.config_path)
             self.state.selection.current = ACTIVE_ID
             log.info("mode: %s", text)
+        self._notify_changed()
         return self._profiles()
 
     # -- D-Bus API ---------------------------------------------------------
@@ -830,9 +851,12 @@ class Daemon(dbus.service.Object):
     def SetFocus(self, pid, resource_class, desktop_file_name, caption) -> int:  # noqa: N802
         """Called by the KWin script on every window activation."""
         focus = focus_from_dbus(pid, resource_class, desktop_file_name, caption)
-        if focus != self.state.focus:
+        focus_changed = focus != self.state.focus
+        if focus_changed:
             log.debug("focus: %s", self.focus_summary(focus))
         self.state.update_focus(focus)
+        if focus_changed:
+            self._notify_changed()
         return 0
 
     @dbus.service.method(IFACE, in_signature="sd", out_signature="s")
@@ -1108,6 +1132,7 @@ class Daemon(dbus.service.Object):
         max_volume = self._max_volume_of(profile)
         by_index = {stream.index: stream for stream in streams}
         peaks: list[float] = []
+        applied = False
 
         for index in result.indices:
             stream = by_index[index]
@@ -1124,6 +1149,7 @@ class Daemon(dbus.service.Object):
             if changed(old, new):
                 self.pulse.set_volume(index, new)
                 entry["applied"] = True
+                applied = True
                 log.info(
                     "%s %s -> %s for %s (stream %d, %s)",
                     direction,
@@ -1156,6 +1182,8 @@ class Daemon(dbus.service.Object):
                     name=caption,
                     maximum=maximum,
                 )
+        if applied:
+            self._notify_changed()
         return payload
 
     def _toggle_mute(self, profile: Profile | None = None) -> dict:
@@ -1184,10 +1212,12 @@ class Daemon(dbus.service.Object):
         # set means "bring it back".
         mute = any(not stream.mute for stream in matched_streams)
         peaks: list[float] = []
+        applied = False
 
         for stream in matched_streams:
             if stream.mute != mute:
                 self.pulse.set_mute(stream.index, mute)
+                applied = True
             peaks.append(peak(stream.volume))
             payload["streams"].append(
                 {
@@ -1222,6 +1252,8 @@ class Daemon(dbus.service.Object):
         else:
             # Nothing to show on the progress bar.
             self.osd.text(icon, "Unmuted")
+        if applied:
+            self._notify_changed()
         return payload
 
     def _payload(self, action: str, profile: Profile, result: MatchResult) -> dict:
@@ -1267,6 +1299,7 @@ class Daemon(dbus.service.Object):
         ceiling = self._max_volume_of(profile)
         target = min(percent / 100.0, ceiling)
         peaks: list[float] = []
+        applied = False
         for index in result.indices:
             stream = by_index[index]
             old = list(stream.volume) or [0.0]
@@ -1276,6 +1309,7 @@ class Daemon(dbus.service.Object):
             if changed(old, new):
                 self.pulse.set_volume(index, new)
                 entry["applied"] = True
+                applied = True
             else:
                 entry["applied"] = False
             payload["streams"].append(entry)
@@ -1287,6 +1321,8 @@ class Daemon(dbus.service.Object):
             profile.display_name,
             result.indices,
         )
+        if applied:
+            self._notify_changed()
         return payload
 
     def _set_mute(self, profile: Profile, muted: bool) -> dict:
@@ -1300,10 +1336,12 @@ class Daemon(dbus.service.Object):
 
         by_index = {stream.index: stream for stream in streams}
         peaks: list[float] = []
+        applied = False
         for index in result.indices:
             stream = by_index[index]
             if stream.mute != muted:
                 self.pulse.set_mute(index, muted)
+                applied = True
             peaks.append(peak(stream.volume))
             payload["streams"].append(
                 {
@@ -1321,6 +1359,8 @@ class Daemon(dbus.service.Object):
             profile.display_name,
             result.indices,
         )
+        if applied:
+            self._notify_changed()
         return payload
 
     def _applications(self) -> dict:

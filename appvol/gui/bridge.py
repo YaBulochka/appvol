@@ -11,13 +11,31 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from PySide6.QtCore import Property, QObject, QProcess, Signal, Slot
+from PySide6.QtCore import (
+    QCoreApplication,
+    Property,
+    QObject,
+    QProcess,
+    SLOT,
+    QTimer,
+    Signal,
+    Slot,
+)
+
+try:
+    from PySide6.QtDBus import QDBusConnection, QDBusServiceWatcher
+
+    HAVE_QTDUS = True
+except ImportError:  # pragma: no cover - a split PySide6 may omit QtDBus
+    QDBusConnection = None
+    QDBusServiceWatcher = None
+    HAVE_QTDUS = False
 
 from .. import __version__
 from ..apps import Application, matching_applications
 from ..icon import resolve as resolve_icon, theme_icon_names
 from ..profiles import ACTIVE_ID, Profile, action_name, id_from_name
-from .client import NOT_RUNNING, Client, DaemonError
+from .client import BUS_NAME, IFACE, NOT_RUNNING, OBJECT_PATH, Client, DaemonError
 from .shortcuts import ShortcutKeys
 
 log = logging.getLogger(__name__)
@@ -52,6 +70,16 @@ class Bridge(QObject):
         self._config: dict = {}
         self._error = ""
         self._running = True
+        self._visible = True
+        self._dbus = None
+        self._watcher = None
+        self._signal_connected = False
+        # Coalesce a burst of daemon signals into one Overview call.
+        self._changed_timer = QTimer(self)
+        self._changed_timer.setSingleShot(True)
+        self._changed_timer.setInterval(0)
+        self._changed_timer.timeout.connect(self.refresh)
+        self._subscribe_daemon()
 
     # -- properties --------------------------------------------------------
 
@@ -123,6 +151,11 @@ class Bridge(QObject):
         # panel would otherwise keep stale data behind a cleared banner.
         if overview is not None and applications is not None:
             self._set_error("")
+
+    @Slot(bool)
+    def setVisible(self, visible: bool) -> None:
+        """Remember whether the window is on screen; a hidden window stays quiet."""
+        self._visible = bool(visible)
 
     @Slot(str, bool)
     def selectProfile(self, profile_id: str, osd: bool = False) -> None:
@@ -272,6 +305,58 @@ class Bridge(QObject):
             if started:
                 return
         self._set_error("cannot open System Settings, run `systemsettings kcm_keys` yourself")
+
+    # -- daemon signals ----------------------------------------------------
+
+    def _subscribe_daemon(self) -> None:
+        """Ask the daemon to push its own changes instead of only polling.
+
+        The timer in the window stays: a stream can start, stop or change from
+        outside appvol, and that has no signal yet.
+        """
+        if not HAVE_QTDUS or QCoreApplication.instance() is None:
+            return
+        bus = QDBusConnection.sessionBus()
+        if not bus.isConnected():
+            log.debug("gui: no session bus, the panel stays on the timer")
+            return
+        self._dbus = bus
+        self._watcher = QDBusServiceWatcher(
+            BUS_NAME, bus, QDBusServiceWatcher.WatchForOwnerChange, self
+        )
+        self._watcher.serviceOwnerChanged.connect(self._on_daemon_owner_changed)
+        self._connect_changed()
+
+    def _connect_changed(self) -> None:
+        if self._signal_connected or self._dbus is None:
+            return
+        try:
+            self._signal_connected = self._dbus.connect(
+                BUS_NAME,
+                OBJECT_PATH,
+                IFACE,
+                "Changed",
+                self,
+                SLOT("_on_daemon_changed()"),
+            )
+        except Exception:  # noqa: BLE001 - the timer still keeps the panel fresh
+            log.warning("gui: cannot subscribe to %s.Changed", BUS_NAME, exc_info=True)
+            self._signal_connected = False
+            return
+        if not self._signal_connected:
+            log.warning("gui: %s.Changed is not available", BUS_NAME)
+
+    @Slot(str, str, str)
+    def _on_daemon_owner_changed(self, _name: str, _old: str, new: str) -> None:
+        if new:
+            self._connect_changed()
+            if self._visible:
+                self._changed_timer.start()
+
+    @Slot()
+    def _on_daemon_changed(self) -> None:
+        if self._visible:
+            self._changed_timer.start()
 
     # -- internals ---------------------------------------------------------
 

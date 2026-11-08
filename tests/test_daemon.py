@@ -357,6 +357,8 @@ class StepDaemon(daemon.Daemon):
         self.profiles_path = base / "profiles.toml"
         self.config_path = base / "config.toml"
         self.state = daemon.State()
+        # The daemon emits a D-Bus signal; the test double has no bus.
+        self._notify_changed = mock.Mock()
 
 
 class PulseManagerFailureTest(unittest.TestCase):
@@ -653,6 +655,51 @@ class AddProfileValidationTest(unittest.TestCase):
 
             self.assertIsNone(app.profiles[0].step)
             self.assertIsNone(app.profiles[0].max_volume)
+
+
+class ChangedSignalTest(unittest.TestCase):
+    """The daemon pushes a signal after the changes the window must redraw."""
+
+    def test_a_focus_change_notifies_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+            app._notify_changed.reset_mock()
+
+            app.SetFocus(42, "konsole", "org.kde.konsole", "Konsole")
+            app._notify_changed.assert_called_once_with()
+
+            app._notify_changed.reset_mock()
+            app.SetFocus(42, "konsole", "org.kde.konsole", "Konsole")
+            app._notify_changed.assert_not_called()
+
+    def test_a_volume_change_notifies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+            app.pulse = RecordingPulse([SPOTIFY_STREAM])
+            app._notify_changed.reset_mock()
+
+            app._set_volume(Profile(id="x", include=("spotify",)), 40.0)
+
+            app._notify_changed.assert_called_once_with()
+
+    def test_an_unchanged_volume_does_not_notify(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+            app.pulse = RecordingPulse([SPOTIFY_STREAM])
+            app._notify_changed.reset_mock()
+
+            app._set_volume(Profile(id="x", include=("spotify",)), 50.0)
+
+            app._notify_changed.assert_not_called()
+
+    def test_a_mode_change_notifies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+            app._notify_changed.reset_mock()
+
+            app._set_mode("auto")
+
+            app._notify_changed.assert_called_once_with()
 
 
 class FakePulse:

@@ -243,8 +243,8 @@ if [ "$with_deb" = yes ] || [ "$with_rpm" = yes ]; then
             python3 python3-dbus python3-gi python3-pulsectl
         fpm_package deb appvol-gui _stage_gui yes \
             appvol python3-pyside6.qtwidgets python3-pyside6.qtqml \
-            qml6-module-org-kde-kirigami qml6-module-org-kde-desktop \
-            kf6-breeze-icon-theme
+            python3-pyside6.qtdbus qml6-module-org-kde-kirigami \
+            qml6-module-org-kde-desktop kf6-breeze-icon-theme
     fi
     if [ "$with_rpm" = yes ]; then
         fpm_package rpm appvol _stage_core no \
