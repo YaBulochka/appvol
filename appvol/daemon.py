@@ -157,6 +157,8 @@ def find_kwin_script(candidates: Iterable[Path] | None = None) -> Path:
     return paths[0]
 
 PULSE_KEEPALIVE_SECONDS = 15
+PULSE_RETRY_SECONDS = 2.0
+PULSE_WARNING_SECONDS = 30.0
 PULSE_NAME = "appvol"
 
 
@@ -171,6 +173,9 @@ class PulseManager:
     def __init__(self) -> None:
         self._pulse: pulsectl.Pulse | None = None
         self._lock = threading.RLock()
+        self._retry_after = 0.0
+        self._last_warning = 0.0
+        self._down_since: float | None = None
 
     @property
     def connected(self) -> bool:
@@ -199,6 +204,14 @@ class PulseManager:
 
     def _call(self, operation, description: str):
         with self._lock:
+            now = time.monotonic()
+            if now < self._retry_after and not self.connected:
+                # A stopped server should not cost two connection attempts on
+                # every 500 ms window poll.  The keepalive and the next call
+                # after the short pause try again.
+                log.debug("pulse is still unavailable (%s)", description)
+                raise RuntimeError(f"pulse operation failed: {description}") from None
+
             last_error: Exception | None = None
             for attempt in (0, 1):
                 try:
@@ -212,16 +225,35 @@ class PulseManager:
                         if (attempt == 0 and self.connected)
                         else self._connect_locked()
                     )
-                    return operation(pulse)
+                    result = operation(pulse)
+                    if self._down_since is not None:
+                        log.info("pipewire-pulse is reachable again")
+                        self._down_since = None
+                        self._last_warning = 0.0
+                    self._retry_after = 0.0
+                    return result
                 except Exception as exc:  # noqa: BLE001 - connection errors are expected
                     last_error = exc
-                    log.warning(
-                        "pulse operation failed (%s, attempt %d): %s: %s",
-                        description,
-                        attempt + 1,
-                        type(exc).__name__,
-                        exc,
-                    )
+                    now = time.monotonic()
+                    if now - self._last_warning >= PULSE_WARNING_SECONDS:
+                        log.warning(
+                            "pulse operation failed (%s, attempt %d): %s: %s",
+                            description,
+                            attempt + 1,
+                            type(exc).__name__,
+                            exc,
+                        )
+                        self._last_warning = now
+                    else:
+                        log.debug(
+                            "pulse operation failed (%s, attempt %d): %s: %s",
+                            description,
+                            attempt + 1,
+                            type(exc).__name__,
+                            exc,
+                        )
+                    self._down_since = self._down_since or now
+                    self._retry_after = now + PULSE_RETRY_SECONDS
                     log.debug("pulse failure details", exc_info=True)
                     self._close_locked()
             raise RuntimeError(f"pulse operation failed: {description}") from last_error
@@ -511,7 +543,7 @@ class Daemon(dbus.service.Object):
         try:
             return list(self.pulse.streams())
         except RuntimeError as exc:
-            log.warning("cannot read the streams for the auto mode: %s", exc)
+            log.debug("cannot read the streams for the auto mode: %s", exc)
             return None
 
     def _reconcile(self, targets: Sequence[Profile]) -> None:
@@ -533,6 +565,17 @@ class Daemon(dbus.service.Object):
 
     def on_shortcut(self, action: str) -> None:
         """A key of the Appvol component was pressed."""
+        try:
+            self._dispatch_shortcut(action)
+        except RuntimeError as exc:
+            now = time.monotonic()
+            if now - getattr(self, "_shortcut_warning", 0.0) >= PULSE_WARNING_SECONDS:
+                log.warning("cannot run the %s shortcut: %s", action, exc)
+                self._shortcut_warning = now
+            else:
+                log.debug("cannot run the %s shortcut: %s", action, exc)
+
+    def _dispatch_shortcut(self, action: str) -> None:
         if action == ACTION_VOLUME_UP:
             self._adjust(UP, 0.0)
             return
@@ -648,7 +691,7 @@ class Daemon(dbus.service.Object):
         try:
             _streams, result = self._resolve(active_profile())
         except RuntimeError as exc:
-            log.warning("cannot read the streams for the Active profile: %s", exc)
+            log.debug("cannot read the streams for the Active profile: %s", exc)
             return False
         return result.matched
 
@@ -1392,7 +1435,7 @@ class Daemon(dbus.service.Object):
         try:
             streams: list[Stream] | None = self.pulse.streams()
         except RuntimeError as exc:
-            log.warning("cannot read the streams for the overview: %s", exc)
+            log.debug("cannot read the streams for the overview: %s", exc)
             streams = None
 
         by_index = {stream.index: stream for stream in streams} if streams else {}

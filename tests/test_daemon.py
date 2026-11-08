@@ -218,43 +218,52 @@ class ShortcutDispatchTest(unittest.TestCase):
     def test_the_volume_keys_run_the_volume_code(self) -> None:
         app = self.daemon_with()
 
-        daemon.Daemon.on_shortcut(app, daemon.ACTION_VOLUME_UP)
+        daemon.Daemon._dispatch_shortcut(app, daemon.ACTION_VOLUME_UP)
         app._adjust.assert_called_once_with(daemon.UP, 0.0)
 
         app._adjust.reset_mock()
-        daemon.Daemon.on_shortcut(app, daemon.ACTION_VOLUME_DOWN)
+        daemon.Daemon._dispatch_shortcut(app, daemon.ACTION_VOLUME_DOWN)
         app._adjust.assert_called_once_with(daemon.DOWN, 0.0)
 
     def test_the_mute_key_toggles(self) -> None:
         app = self.daemon_with()
-        daemon.Daemon.on_shortcut(app, daemon.ACTION_VOLUME_MUTE)
+        daemon.Daemon._dispatch_shortcut(app, daemon.ACTION_VOLUME_MUTE)
         app._toggle_mute.assert_called_once_with()
 
     def test_the_cycling_keys_step_in_both_directions(self) -> None:
         app = self.daemon_with()
 
-        daemon.Daemon.on_shortcut(app, daemon.ACTION_NEXT_PROFILE)
+        daemon.Daemon._dispatch_shortcut(app, daemon.ACTION_NEXT_PROFILE)
         app._cycle_profile.assert_called_once_with(1)
 
         app._cycle_profile.reset_mock()
-        daemon.Daemon.on_shortcut(app, daemon.ACTION_PREVIOUS_PROFILE)
+        daemon.Daemon._dispatch_shortcut(app, daemon.ACTION_PREVIOUS_PROFILE)
         app._cycle_profile.assert_called_once_with(-1)
 
     def test_a_profile_key_toggles_its_own_profile(self) -> None:
         app = self.daemon_with([Profile(id="spotify")])
-        daemon.Daemon.on_shortcut(app, "profile_spotify")
+        daemon.Daemon._dispatch_shortcut(app, "profile_spotify")
         app._toggle_profile.assert_called_once_with("spotify")
 
     def test_an_action_of_a_removed_profile_is_ignored(self) -> None:
         app = self.daemon_with([Profile(id="spotify")])
-        daemon.Daemon.on_shortcut(app, "profile_gone")
+        daemon.Daemon._dispatch_shortcut(app, "profile_gone")
         app._toggle_profile.assert_not_called()
 
     def test_an_unknown_action_is_ignored(self) -> None:
         app = self.daemon_with()
-        daemon.Daemon.on_shortcut(app, "something_else")
+        daemon.Daemon._dispatch_shortcut(app, "something_else")
         app._toggle_profile.assert_not_called()
         app._adjust.assert_not_called()
+
+    def test_a_pulse_failure_does_not_escape_the_shortcut_handler(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = StepDaemon(Path(tmp))
+            app._adjust = mock.Mock(side_effect=RuntimeError("pulse down"))
+
+            daemon.Daemon.on_shortcut(app, daemon.ACTION_VOLUME_UP)
+
+            app._adjust.assert_called_once_with(daemon.UP, 0.0)
 
 
 class CycleProfileTest(unittest.TestCase):
@@ -410,6 +419,19 @@ class PulseManagerFailureTest(unittest.TestCase):
 
         self.assertEqual(overview["profiles"][0]["id"], "active")
         self.assertIsNone(overview["profiles"][0]["matched"])
+
+    def test_a_failed_server_is_not_retried_on_every_call(self) -> None:
+        manager = daemon.PulseManager()
+        with mock.patch.object(
+            daemon.pulsectl, "Pulse", side_effect=daemon.pulsectl.PulseError("gone")
+        ) as pulse:
+            with self.assertRaises(RuntimeError):
+                manager.streams()
+            self.assertEqual(pulse.call_count, 2)
+
+            with self.assertRaises(RuntimeError):
+                manager.streams()
+            self.assertEqual(pulse.call_count, 2)
 
     def test_a_lost_call_is_retried_on_a_new_connection(self) -> None:
         manager = daemon.PulseManager()
